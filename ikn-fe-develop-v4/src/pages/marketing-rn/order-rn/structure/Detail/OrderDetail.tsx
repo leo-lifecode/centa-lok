@@ -124,6 +124,7 @@ export default function OrderPRNDetail() {
           description: data.description,
           franco: data.franco,
           subtotalAmount: data.subtotalAmount,
+          totalAmount: Number(data.totalAmount || 0),
           address: data?.customer?.address,
           customerName: data?.customerName,
         });
@@ -273,7 +274,7 @@ export default function OrderPRNDetail() {
           <Descriptions.Item label="Alamat Customer" style={{ maxWidth: 200 }}>
             {form.getFieldValue('address')}
           </Descriptions.Item>
-          <Descriptions.Item label="Harga Total">
+          <Descriptions.Item label="Harga Dasar (tidak termasuk pajak)">
             <div
               style={{
                 display: 'flex',
@@ -295,6 +296,26 @@ export default function OrderPRNDetail() {
           </Descriptions.Item>
           <Descriptions.Item label="Tanggal Pesanan">
             {dayjs(form.getFieldValue('date')).format('DD/MMMM/YYYY')}
+          </Descriptions.Item>
+          <Descriptions.Item label="Total Tagihan (termasuk pajak)">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0,
+              }}
+            >
+              <p>
+                Rp. {globalHelpers.currencyFormatter(form.getFieldValue('totalAmount') || 0)}
+              </p>
+              <p
+                style={{
+                  color: 'green',
+                }}
+              >
+                {globalHelpers.terbilangRupiah(form.getFieldValue('totalAmount') || 0)}
+              </p>
+            </div>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -327,11 +348,6 @@ export default function OrderPRNDetail() {
             String(tax.taxType || '').toUpperCase().includes('PPN')
           )}
         />
-        <Descriptions bordered column={2} size="small" style={{ marginTop: 12 }}>
-          <Descriptions.Item label="Total setelah PPN">
-            Rp {globalHelpers.currencyFormatter(Number(dataPO?.totalAmount || 0))}
-          </Descriptions.Item>
-        </Descriptions>
       </Card>
 
       <Form
