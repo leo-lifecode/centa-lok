@@ -235,11 +235,11 @@ export default function CrossChekPajakRNAdd() {
         setLoading(true);
         const data = await OrderRNAxios.fetchDataOrderPraById(id);
         setDataSourceItems(data?.items || []);
-        setDataSourcePajak(data?.spbTax || []);
+        setDataSourcePajak(data?.PurchaseOrderTax || []);
 
         let totalPPh22 = 0;
         let totalPPh23 = 0;
-        data?.spbTax?.forEach((tax: any) => {
+        data?.PurchaseOrderTax?.forEach((tax: any) => {
           if (tax.taxType === 'PPh 22') {
             totalPPh22 = tax.taxAmount;
           }
