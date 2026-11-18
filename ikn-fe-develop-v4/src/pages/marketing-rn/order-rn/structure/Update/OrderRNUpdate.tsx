@@ -22,7 +22,7 @@ import * as globalHelpers from '@/utils/helper';
 import * as globalHooks from '@/hooks';
 import type { TableColumnsType } from 'antd';
 import DrawerOrderPra from './DrawerOrderRN/DrawerOrderRN';
-import DrawerPajakOrderPra from '@/pages/marketing/order-pra/structure/Components/DrawerOrderPra/DrawerPajakOrderPra';
+import DrawerPajakOrderRN from '../Components/DrawerPajakOrderRN/DrawerPajakOrderRN';
 import dayjs from 'dayjs';
 import Buttonback from '@/components/atoms/button/buttonBack';
 import ButtonEdit from '@/components/atoms/button/buttonEdit';
@@ -444,11 +444,10 @@ export default function OrderRNUpdate() {
       style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
     >
       <ModalCustomer open={open} setOpen={setOpen} handleRowDoubleClick={handleRowDoubleClick} />
-      <DrawerPajakOrderPra
+      <DrawerPajakOrderRN
         openDrawer={openDrawerPajak}
         seOpenDrawer={setOpenDrawerPajak}
         setDataSourcePajak={handleSetDataSourcePajak}
-        taxTypeFilter="PPN"
       />
       <DrawerOrderPra
         openDrawer={openDrawer}
