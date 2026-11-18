@@ -603,6 +603,23 @@ export default function OrderRNAdd() {
                 align: 'center',
                 render: (value: number) => `Rp${globalHelpers.currencyFormatter(value || 0)}`,
               },
+              {
+                title: 'Aksi',
+                key: 'action',
+                align: 'center',
+                render: (_: any, record: any) => (
+                  <Button
+                    danger
+                    onClick={() =>
+                      setDataSourcePajak((previous) =>
+                        previous.filter((tax) => (tax.taxId || tax.id) !== (record.taxId || record.id))
+                      )
+                    }
+                  >
+                    Hapus
+                  </Button>
+                ),
+              },
             ]}
             dataSource={dataSourcePajakDisplay}
             pagination={false}
