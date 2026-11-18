@@ -522,6 +522,17 @@ export default function OrderRNAdd() {
                 placeholder={'Harga total'}
               />
             </Form.Item>
+            <Form.Item label="Total setelah PPN">
+              <InputNumber
+                value={totalSetelahPajak}
+                prefix={<span>Rp</span>}
+                formatter={globalHelpers.formatter}
+                parser={globalHelpers.parser}
+                disabled
+                controls={false}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
           </Col>
         </Row>
         <Card
