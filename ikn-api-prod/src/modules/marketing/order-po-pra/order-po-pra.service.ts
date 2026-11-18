@@ -278,7 +278,7 @@ export class OrderPoPraService {
 		return this.prisma.$transaction(
 			async (tx) => {
 				// 1. Pastikan PO ada
-				await tx.purchaseOrder.findUniqueOrThrow({
+				const currentOrder = await tx.purchaseOrder.findUniqueOrThrow({
 					where: { id: id },
 				});
 
@@ -306,6 +306,15 @@ export class OrderPoPraService {
 						fileUrlProduksi: updateOrderPoPraDto.fileUrlProduksi,
 						subtotalAmount: +updateOrderPoPraDto.subtotalAmount,
 						totalAmount: +updateOrderPoPraDto.totalAmount,
+						...(currentOrder.typePo === 'RN'
+							? {
+								taxAmount:
+									updateOrderPoPraDto.taxes?.reduce(
+										(total, tax) => total + Number(tax.taxAmount),
+										0,
+									) ?? 0,
+							}
+							: {}),
 						customerName: updateOrderPoPraDto.customerName,
 						customerId: updateOrderPoPraDto.customerId,
 						staffId: decoded.id,
@@ -341,7 +350,27 @@ export class OrderPoPraService {
 					});
 				}
 
-				// 5. Tambahkan ulang additional charges
+				// 5. Simpan ulang pajak hanya untuk pesanan RN.
+				// Alur pajak tipe pesanan lain tidak disentuh.
+				if (currentOrder.typePo === 'RN') {
+					await tx.purchaseOrderTax.deleteMany({
+						where: { purchaseOrderId: id },
+					});
+
+					if (updateOrderPoPraDto.taxes && updateOrderPoPraDto.taxes.length > 0) {
+						await tx.purchaseOrderTax.createMany({
+							data: updateOrderPoPraDto.taxes.map((tax) => ({
+								purchaseOrderId: id,
+								taxId: tax.taxId,
+								taxType: tax.taxType,
+								taxValue: Number(tax.taxValue),
+								taxAmount: Number(tax.taxAmount),
+							})),
+						});
+					}
+				}
+
+				// 6. Tambahkan ulang additional charges
 				if (updateOrderPoPraDto.additionalService && updateOrderPoPraDto.additionalService.length > 0) {
 					await tx.additionalCharges.createMany({
 						data: updateOrderPoPraDto.additionalService.map((item) => ({
@@ -359,6 +388,7 @@ export class OrderPoPraService {
 					include: {
 						items: true,
 						additionalCharges: true,
+						PurchaseOrderTax: true,
 					},
 				});
 			},

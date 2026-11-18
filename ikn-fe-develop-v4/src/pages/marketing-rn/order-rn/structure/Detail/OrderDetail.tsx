@@ -299,6 +299,41 @@ export default function OrderPRNDetail() {
         </Descriptions>
       </Card>
 
+      <Card
+        title={<TitleCardItems title="Rincian Pajak" />}
+        style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)', marginTop: 10 }}
+      >
+        <Table
+          rowKey={(record: any) => record.id || record.taxId}
+          pagination={false}
+          columns={[
+            { title: 'Tipe Pajak', dataIndex: 'taxType', key: 'taxType', align: 'center' },
+            {
+              title: 'Nilai Pajak',
+              dataIndex: 'taxValue',
+              key: 'taxValue',
+              align: 'center',
+              render: (value: number) => `${Number(value || 0) * 100}%`,
+            },
+            {
+              title: 'Jumlah PPN',
+              dataIndex: 'taxAmount',
+              key: 'taxAmount',
+              align: 'center',
+              render: (value: number) => `Rp${globalHelpers.currencyFormatter(value || 0)}`,
+            },
+          ]}
+          dataSource={(dataPO?.PurchaseOrderTax || []).filter((tax: any) =>
+            String(tax.taxType || '').toUpperCase().includes('PPN')
+          )}
+        />
+        <Descriptions bordered column={2} size="small" style={{ marginTop: 12 }}>
+          <Descriptions.Item label="Total setelah PPN">
+            Rp {globalHelpers.currencyFormatter(Number(dataPO?.totalAmount || 0))}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
       <Form
         layout="vertical"
         form={form}
