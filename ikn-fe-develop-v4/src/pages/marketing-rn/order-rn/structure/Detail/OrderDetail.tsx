@@ -48,6 +48,16 @@ export default function OrderPRNDetail() {
 
   const [dataSourceItems, setDataSourceItems] = useState<any>([]);
 
+  // Gunakan total tagihan tersimpan. Jika data lama belum memiliki totalAmount,
+  // hitung dari harga dasar + seluruh nominal PPN yang tersimpan.
+  const totalTagihan =
+    Number(dataPO?.totalAmount || 0) > 0
+      ? Number(dataPO?.totalAmount)
+      : Number(dataPO?.subtotalAmount || 0) +
+        (dataPO?.PurchaseOrderTax || [])
+          .filter((tax: any) => String(tax.taxType || '').toUpperCase() === 'PPN')
+          .reduce((total: number, tax: any) => total + Number(tax.taxAmount || 0), 0);
+
   const onFinish = async (values: any) => {
     try {
       setLoading(true);
@@ -257,7 +267,7 @@ export default function OrderPRNDetail() {
       }
     >
       <Card
-        title={<TitleCardItems title="Detail Pengiriman" />}
+        title={<TitleCardItems title="Detail Pesanan" />}
         style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
       >
         <Descriptions bordered column={2} size="small">
@@ -306,14 +316,14 @@ export default function OrderPRNDetail() {
               }}
             >
               <p>
-                Rp. {globalHelpers.currencyFormatter(form.getFieldValue('totalAmount') || 0)}
+                Rp. {globalHelpers.currencyFormatter(totalTagihan)}
               </p>
               <p
                 style={{
                   color: 'green',
                 }}
               >
-                {globalHelpers.terbilangRupiah(form.getFieldValue('totalAmount') || 0)}
+                {globalHelpers.terbilangRupiah(totalTagihan)}
               </p>
             </div>
           </Descriptions.Item>
