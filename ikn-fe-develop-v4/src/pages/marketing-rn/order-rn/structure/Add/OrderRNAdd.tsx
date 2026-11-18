@@ -24,7 +24,7 @@ import { useState } from 'react';
 import { useEffect } from '@/hooks/React/useEffect';
 import { Button, Card, DatePicker, Input, InputNumber, Table } from '@/components/ui';
 import ModalHistoriOrder from '../Components/ModalHistoriOrder/ModalHistoriOrder';
-import DrawerPajakOrderPra from '@/pages/marketing/order-pra/structure/Components/DrawerOrderPra/DrawerPajakOrderPra';
+import DrawerPajakOrderRN from '../Components/DrawerPajakOrderRN/DrawerPajakOrderRN';
 import { OrderRNInterfacesHistory } from '../../interface/OrderRNInterfacesHistory';
 
 export default function OrderRNAdd() {
@@ -343,11 +343,10 @@ export default function OrderRNAdd() {
         handleRowDoubleClick={handleRowDoubleClickHistori}
       />
       <ModalCustomer open={open} setOpen={setOpen} handleRowDoubleClick={handleRowDoubleClick} />
-      <DrawerPajakOrderPra
+      <DrawerPajakOrderRN
         openDrawer={openDrawerPajak}
         seOpenDrawer={setOpenDrawerPajak}
         setDataSourcePajak={handleSetDataSourcePajak}
-        taxTypeFilter="PPN"
       />
       <DrawerOrderPra
         openDrawer={openDrawer}
