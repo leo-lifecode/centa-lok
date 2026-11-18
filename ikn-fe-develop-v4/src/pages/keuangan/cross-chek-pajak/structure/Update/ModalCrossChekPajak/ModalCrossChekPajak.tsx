@@ -120,10 +120,12 @@ export default function ModalCrossChekPajak({
   setOpen,
   open,
   handleRowDoubleClick,
+  taxTypeFilter,
 }: Readonly<{
   setOpen: Function;
   open: boolean;
   handleRowDoubleClick: Function;
+  taxTypeFilter?: string;
 }>) {
   const [searchText, setSearchText] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
@@ -134,7 +136,7 @@ export default function ModalCrossChekPajak({
     limit: 5,
     total: 0,
     loading: false,
-    taxType: '',
+    taxType: taxTypeFilter || '',
     taxValue: 0,
   });
 
