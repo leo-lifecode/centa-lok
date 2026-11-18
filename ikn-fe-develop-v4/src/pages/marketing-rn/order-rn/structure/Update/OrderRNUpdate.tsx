@@ -22,6 +22,7 @@ import * as globalHelpers from '@/utils/helper';
 import * as globalHooks from '@/hooks';
 import type { TableColumnsType } from 'antd';
 import DrawerOrderPra from './DrawerOrderRN/DrawerOrderRN';
+import DrawerPajakOrderPra from '@/pages/marketing/order-pra/structure/Components/DrawerOrderPra/DrawerPajakOrderPra';
 import dayjs from 'dayjs';
 import Buttonback from '@/components/atoms/button/buttonBack';
 import ButtonEdit from '@/components/atoms/button/buttonEdit';
@@ -54,6 +55,35 @@ export default function OrderRNUpdate() {
   });
 
   const [dataSourceItems, setDataSourceItems] = useState<OrderRNInterfaces.ProductType[]>([]);
+  const [dataSourcePajak, setDataSourcePajak] = useState<any[]>([]);
+  const [openDrawerPajak, setOpenDrawerPajak] = useState({
+    open: false,
+    totalAmount: 0,
+    subtotalAmount: 0,
+  });
+  const subtotalAmount = Form.useWatch('subtotalAmount', form) || 0;
+  const totalPajak = dataSourcePajak.reduce(
+    (total, tax) => total + Number(subtotalAmount) * Number(tax.taxValue || 0),
+    0
+  );
+  const totalSetelahPajak = Number(subtotalAmount) + totalPajak;
+  const dataSourcePajakDisplay = dataSourcePajak.map((tax) => ({
+    ...tax,
+    taxAmount: Number(subtotalAmount) * Number(tax.taxValue || 0),
+  }));
+
+  const handleSetDataSourcePajak = (updater: any) => {
+    setDataSourcePajak((previous) => {
+      const next = typeof updater === 'function' ? updater(previous) : updater;
+      const ppnOnly = next.filter((tax: any) =>
+        String(tax.taxType || '').toUpperCase().includes('PPN')
+      );
+      if (ppnOnly.length !== next.length) {
+        showNotification('warning', 'Pajak tidak ditambahkan', 'Pesanan RN hanya mendukung PPN.');
+      }
+      return ppnOnly;
+    });
+  };
 
   useEffect(() => {
     const hargaTotal = globalHelpers.hitungTotalHarga(dataSourceItems);
@@ -193,6 +223,16 @@ export default function OrderRNUpdate() {
             items: picked,
           };
         }
+        values = {
+          ...values,
+          totalAmount: totalSetelahPajak,
+          taxes: dataSourcePajakDisplay.map((tax) => ({
+            taxId: tax.taxId || tax.id,
+            taxType: tax.taxType,
+            taxValue: Number(tax.taxValue),
+            taxAmount: Number(tax.taxAmount),
+          })),
+        };
         await OrderPraAxios.updateOrderPra(id, values);
         showNotification('success', 'Berhasil', 'Berhasil Ubah Data');
         setTimeout(() => {
@@ -231,6 +271,7 @@ export default function OrderRNUpdate() {
         const data = await OrderPraAxios.fetchDataOrderPraById(id);
         setDataPO(data);
         setDataSourceItems(data?.items || []);
+        setDataSourcePajak((data?.PurchaseOrderTax || []).filter((tax: any) => String(tax.taxType || '').toUpperCase().includes('PPN')));
         form.setFieldsValue({
           orderNumber: data.orderNumber,
           customerId: data.customerId,
@@ -403,6 +444,11 @@ export default function OrderRNUpdate() {
       style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
     >
       <ModalCustomer open={open} setOpen={setOpen} handleRowDoubleClick={handleRowDoubleClick} />
+      <DrawerPajakOrderPra
+        openDrawer={openDrawerPajak}
+        seOpenDrawer={setOpenDrawerPajak}
+        setDataSourcePajak={handleSetDataSourcePajak}
+      />
       <DrawerOrderPra
         openDrawer={openDrawer}
         formItems={formItems}
@@ -632,6 +678,60 @@ export default function OrderRNUpdate() {
           />{' '}
         </Card>
 
+        <Card title="Daftar Pajak">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <Button
+              type="primary"
+              htmlType="button"
+              icon={<Plus />}
+              onClick={() =>
+                setOpenDrawerPajak((previous) => ({
+                  ...previous,
+                  open: true,
+                  subtotalAmount: Number(form.getFieldValue('subtotalAmount') || 0),
+                  totalAmount: totalSetelahPajak,
+                }))
+              }
+            >
+              Tambah PPN
+            </Button>
+          </div>
+          <Table
+            rowKey={(record: any) => record.taxId || record.id}
+            columns={[
+              { title: 'Tipe Pajak', dataIndex: 'taxType', key: 'taxType', align: 'center' },
+              {
+                title: 'Nilai Pajak',
+                dataIndex: 'taxValue',
+                key: 'taxValue',
+                align: 'center',
+                render: (value: number) => `${Number(value || 0) * 100}%`,
+              },
+              {
+                title: 'Jumlah Pajak',
+                dataIndex: 'taxAmount',
+                key: 'taxAmount',
+                align: 'center',
+                render: (value: number) => `Rp${globalHelpers.currencyFormatter(value || 0)}`,
+              },
+              {
+                title: 'Aksi',
+                key: 'action',
+                align: 'center',
+                render: (_: any, record: any) => (
+                  <Button
+                    danger
+                    onClick={() => setDataSourcePajak((previous) => previous.filter((tax) => (tax.taxId || tax.id) !== (record.taxId || record.id)))}
+                  >
+                    Hapus
+                  </Button>
+                ),
+              },
+            ]}
+            dataSource={dataSourcePajakDisplay}
+            pagination={false}
+          />
+        </Card>
         <Flex gap="small">
           <Buttonback loading={loading} />
           <ButtonEdit loading={loading} />
