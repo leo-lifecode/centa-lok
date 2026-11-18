@@ -211,7 +211,7 @@ export default function CrossChekPajakRNUpdate() {
 
         let totalPPh22 = 0;
         let totalPPh23 = 0;
-        data?.spbTax?.forEach((tax: any) => {
+        data?.PurchaseOrderTax?.forEach((tax: any) => {
           if (tax.taxType === 'PPh 22') {
             totalPPh22 = tax.taxAmount;
           }
