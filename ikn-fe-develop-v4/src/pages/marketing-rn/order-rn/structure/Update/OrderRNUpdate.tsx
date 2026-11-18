@@ -448,6 +448,7 @@ export default function OrderRNUpdate() {
         openDrawer={openDrawerPajak}
         seOpenDrawer={setOpenDrawerPajak}
         setDataSourcePajak={handleSetDataSourcePajak}
+        taxTypeFilter="PPN"
       />
       <DrawerOrderPra
         openDrawer={openDrawer}
