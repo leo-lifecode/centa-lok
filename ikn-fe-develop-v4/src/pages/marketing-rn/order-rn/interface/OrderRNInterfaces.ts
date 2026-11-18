@@ -12,6 +12,15 @@ export interface PurchaseOrderItemType {
   satuanProduct: string;
 }
 
+export interface PurchaseOrderTaxType {
+  id: string;
+  purchaseOrderId: string;
+  taxId: string;
+  taxType: string;
+  taxValue: number;
+  taxAmount: number;
+}
+
 export interface PurchaseOrderData {
   orderNumber: string;
   date: string;
@@ -21,6 +30,7 @@ export interface PurchaseOrderData {
   subtotalAmount: number;
   taxAmount: number | null;
   totalAmount: number;
+  PurchaseOrderTax: PurchaseOrderTaxType[];
   items: PurchaseOrderItemType[];
   customer: CutomerType;
   fileUrl: string;
@@ -73,6 +83,8 @@ export interface PayloadOrderRNType {
   typePo: string;
   file: FileType;
   fileKontrak: FileType;
+  totalAmount?: number;
+  taxes: { taxId: string; taxType: string; taxValue: number; taxAmount: number }[];
 }
 
 export interface ItemType {
