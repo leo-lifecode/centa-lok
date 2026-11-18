@@ -347,6 +347,7 @@ export default function OrderRNAdd() {
         openDrawer={openDrawerPajak}
         seOpenDrawer={setOpenDrawerPajak}
         setDataSourcePajak={handleSetDataSourcePajak}
+        taxTypeFilter="PPN"
       />
       <DrawerOrderPra
         openDrawer={openDrawer}
