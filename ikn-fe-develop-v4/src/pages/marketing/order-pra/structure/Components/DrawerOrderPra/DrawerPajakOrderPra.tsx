@@ -8,6 +8,7 @@ export default function DrawerPajakOrderPra({
   openDrawer,
   seOpenDrawer,
   setDataSourcePajak,
+  taxTypeFilter,
 }: Readonly<{
   openDrawer: {
     open: boolean;
@@ -15,6 +16,7 @@ export default function DrawerPajakOrderPra({
   };
   seOpenDrawer: Function;
   setDataSourcePajak: Function;
+  taxTypeFilter?: string;
 }>) {
   const [open, setOpen] = useState(false);
   const [formItems] = Form.useForm();
@@ -80,7 +82,12 @@ export default function DrawerPajakOrderPra({
       }
     >
       {open && (
-        <ModalProdukPra setOpen={setOpen} open={open} handleRowDoubleClick={handleRowDoubleClick} />
+        <ModalProdukPra
+          setOpen={setOpen}
+          open={open}
+          handleRowDoubleClick={handleRowDoubleClick}
+          taxTypeFilter={taxTypeFilter}
+        />
       )}
 
       <Form
