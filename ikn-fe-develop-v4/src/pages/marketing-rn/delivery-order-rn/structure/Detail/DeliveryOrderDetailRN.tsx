@@ -271,13 +271,13 @@ export default function DeliveryOrderDetailRN() {
                 gap: 0,
               }}
             >
-              <p>Rp. {globalHelpers.currencyFormatter(form.getFieldValue('totalAmount') || 0)}</p>
+              <p>Rp. {globalHelpers.currencyFormatter(Number(form.getFieldValue('totalAmount') || 0))}</p>
               <p
                 style={{
                   color: 'green',
                 }}
               >
-                {globalHelpers.terbilangRupiah(form.getFieldValue('totalAmount') || 0)}
+                {globalHelpers.terbilangRupiah(Number(form.getFieldValue('totalAmount') || 0))}
               </p>
             </div>
           </Descriptions.Item>
