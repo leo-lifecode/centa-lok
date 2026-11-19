@@ -84,7 +84,7 @@ export default function InvoiceDetailRN() {
           description: data?.spb?.purchaseOrder?.description,
           franco: data?.spb?.purchaseOrder?.franco,
           status: data?.spb?.purchaseOrder?.status,
-          totalAmount: data?.amountWithTax,
+          totalAmount: data?.totalAmount,
           purchaseOrderId: data?.spb?.purchaseOrder?.id,
           invoiceNumber: data?.invoiceNumber,
           invoiceDate: dayjs(data?.spb.purchaseOrder.date),
@@ -231,6 +231,9 @@ export default function InvoiceDetailRN() {
       showNotification('error', 'Gagal', 'Terjadi Kesalahan');
     }
   };
+  const hargaTotal = Number((dataInvoice as any)?.totalAmount || 0);
+  const hargaTotalSetelahPajak = Number((dataInvoice as any)?.amountWithTax || 0);
+
   const watchInvoiceDateManual = Form.useWatch('invoiceDateManual', formInv);
 
   return (
@@ -385,13 +388,31 @@ export default function InvoiceDetailRN() {
                 gap: 0,
               }}
             >
-              <p>Rp. {globalHelpers.currencyFormatter(form.getFieldValue('totalAmount') || 0)}</p>
+              <p>Rp. {globalHelpers.currencyFormatter(hargaTotal)}</p>
               <p
                 style={{
                   color: 'green',
                 }}
               >
-                {globalHelpers.terbilangRupiah(form.getFieldValue('totalAmount') || 0)}
+                {globalHelpers.terbilangRupiah(hargaTotal)}
+              </p>
+            </div>
+          </Descriptions.Item>
+          <Descriptions.Item label="Harga Total Setelah Pajak">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0,
+              }}
+            >
+              <p>Rp. {globalHelpers.currencyFormatter(hargaTotalSetelahPajak)}</p>
+              <p
+                style={{
+                  color: 'green',
+                }}
+              >
+                {globalHelpers.terbilangRupiah(hargaTotalSetelahPajak)}
               </p>
             </div>
           </Descriptions.Item>
