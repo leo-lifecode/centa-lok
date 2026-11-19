@@ -86,13 +86,12 @@ export class OrderPoPraService {
 
 	async create(createOrderPoRubberDto: CreateOrderPoPraDto, decoded: DecodeTokenType) {
 		try {
-			const rnTaxData = createOrderPoRubberDto.typePo === 'RN'
-				? await this.prisma.$transaction((tx) =>
-					this.prepareRnTaxes(tx, createOrderPoRubberDto.taxes, Number(createOrderPoRubberDto.subtotalAmount)),
-				)
-				: null;
+			return this.prisma.$transaction(async (tx) => {
+				const rnTaxData = createOrderPoRubberDto.typePo === 'RN'
+					? await this.prepareRnTaxes(tx, createOrderPoRubberDto.taxes, Number(createOrderPoRubberDto.subtotalAmount))
+					: null;
 
-			return this.prisma.purchaseOrder.create({
+				return tx.purchaseOrder.create({
 				data: {
 					orderNumber: createOrderPoRubberDto.orderNumber,
 					date: createOrderPoRubberDto.date,
@@ -155,6 +154,7 @@ export class OrderPoPraService {
 					items: true,
 					PurchaseOrderTax: true,
 				},
+				});
 			});
 		} catch (e) {
 			throw e;
