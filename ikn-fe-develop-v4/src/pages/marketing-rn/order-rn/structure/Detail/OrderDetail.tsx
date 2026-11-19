@@ -48,6 +48,16 @@ export default function OrderPRNDetail() {
 
   const [dataSourceItems, setDataSourceItems] = useState<any>([]);
 
+  // Gunakan total tagihan tersimpan. Jika data lama belum memiliki totalAmount,
+  // hitung dari harga dasar + seluruh nominal PPN yang tersimpan.
+  const totalTagihan =
+    Number(dataPO?.totalAmount || 0) > 0
+      ? Number(dataPO?.totalAmount)
+      : Number(dataPO?.subtotalAmount || 0) +
+        (dataPO?.PurchaseOrderTax || [])
+          .filter((tax: any) => String(tax.taxType || '').toUpperCase() === 'PPN')
+          .reduce((total: number, tax: any) => total + Number(tax.taxAmount || 0), 0);
+
   const onFinish = async (values: any) => {
     try {
       setLoading(true);
@@ -124,6 +134,7 @@ export default function OrderPRNDetail() {
           description: data.description,
           franco: data.franco,
           subtotalAmount: data.subtotalAmount,
+          totalAmount: Number(data.totalAmount || 0),
           address: data?.customer?.address,
           customerName: data?.customerName,
         });
@@ -256,7 +267,7 @@ export default function OrderPRNDetail() {
       }
     >
       <Card
-        title={<TitleCardItems title="Detail Pengiriman" />}
+        title={<TitleCardItems title="Detail Pesanan" />}
         style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
       >
         <Descriptions bordered column={2} size="small">
@@ -273,7 +284,7 @@ export default function OrderPRNDetail() {
           <Descriptions.Item label="Alamat Customer" style={{ maxWidth: 200 }}>
             {form.getFieldValue('address')}
           </Descriptions.Item>
-          <Descriptions.Item label="Harga Total">
+          <Descriptions.Item label="Harga Dasar (tidak termasuk pajak)">
             <div
               style={{
                 display: 'flex',
@@ -295,6 +306,26 @@ export default function OrderPRNDetail() {
           </Descriptions.Item>
           <Descriptions.Item label="Tanggal Pesanan">
             {dayjs(form.getFieldValue('date')).format('DD/MMMM/YYYY')}
+          </Descriptions.Item>
+          <Descriptions.Item label="Total Tagihan (termasuk pajak)">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0,
+              }}
+            >
+              <p>
+                Rp. {globalHelpers.currencyFormatter(totalTagihan)}
+              </p>
+              <p
+                style={{
+                  color: 'green',
+                }}
+              >
+                {globalHelpers.terbilangRupiah(totalTagihan)}
+              </p>
+            </div>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -327,11 +358,6 @@ export default function OrderPRNDetail() {
             String(tax.taxType || '').toUpperCase().includes('PPN')
           )}
         />
-        <Descriptions bordered column={2} size="small" style={{ marginTop: 12 }}>
-          <Descriptions.Item label="Total setelah PPN">
-            Rp {globalHelpers.currencyFormatter(Number(dataPO?.totalAmount || 0))}
-          </Descriptions.Item>
-        </Descriptions>
       </Card>
 
       <Form
