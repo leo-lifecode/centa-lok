@@ -360,8 +360,17 @@ export class OrderPoPraService {
 					where: { id: id },
 				});
 
+				const existingRnTaxes = currentOrder.typePo === 'RN' && updateOrderPoPraDto.taxes === undefined
+					? await tx.purchaseOrderTax.findMany({ where: { purchaseOrderId: id } })
+					: undefined;
+				const taxesForUpdate = updateOrderPoPraDto.taxes ?? existingRnTaxes?.map((tax) => ({
+					taxId: tax.taxId,
+					taxType: tax.taxType,
+					taxValue: tax.taxValue,
+					taxAmount: tax.taxAmount,
+				}));
 				const rnTaxData = currentOrder.typePo === 'RN'
-					? await this.prepareRnTaxes(tx, updateOrderPoPraDto.taxes, Number(updateOrderPoPraDto.subtotalAmount))
+					? await this.prepareRnTaxes(tx, taxesForUpdate, Number(updateOrderPoPraDto.subtotalAmount))
 					: null;
 
 				// 2. Hapus items dan additionalCharges lama
