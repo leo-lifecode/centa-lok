@@ -90,13 +90,15 @@ export class PurchaseOrderTaxDto {
 	@ApiProperty({ description: 'taxType', type: String, example: 'PPN' })
 	taxType: string;
 
-	@Validators.IsNumber()
+	@Validators.IsNumber({ allowNaN: false, allowInfinity: false })
+	@Validators.Min(0, { message: 'taxValue tidak boleh negatif' })
 	@Type(() => Number)
 	@Validators.IsNotEmpty({ message: 'taxValue tidak boleh kosong' })
 	@ApiProperty({ description: 'taxValue', type: Number, example: 0.11 })
 	taxValue: number;
 
-	@Validators.IsNumber()
+	@Validators.IsNumber({ allowNaN: false, allowInfinity: false })
+	@Validators.Min(0, { message: 'taxAmount tidak boleh negatif' })
 	@Type(() => Number)
 	@Validators.IsNotEmpty({ message: 'taxAmount tidak boleh kosong' })
 	@ApiProperty({ description: 'taxAmount', type: Number, example: 110 })
@@ -201,6 +203,7 @@ export class UpdateOrderPoPraDto {
 	@ApiProperty({ description: 'totalAmount', type: Number, example: 1000 })
 	totalAmount: number;
 
+	@Validators.IsArray({ message: 'taxes harus berupa array' })
 	@Validators.ValidateNested({ each: true })
 	@Transformers.Type(() => PurchaseOrderTaxDto)
 	@ApiProperty({ type: [PurchaseOrderTaxDto] })
