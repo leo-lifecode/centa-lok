@@ -347,16 +347,14 @@ export default function OrderPRNDetail() {
               render: (value: number) => `${Number(value || 0) * 100}%`,
             },
             {
-              title: 'Jumlah PPN',
+              title: 'Jumlah Pajak',
               dataIndex: 'taxAmount',
               key: 'taxAmount',
               align: 'center',
               render: (value: number) => `Rp${globalHelpers.currencyFormatter(value || 0)}`,
             },
           ]}
-          dataSource={(dataPO?.PurchaseOrderTax || []).filter((tax: any) =>
-            String(tax.taxType || '').toUpperCase().includes('PPN')
-          )}
+          dataSource={dataPO?.PurchaseOrderTax || []}
         />
       </Card>
 

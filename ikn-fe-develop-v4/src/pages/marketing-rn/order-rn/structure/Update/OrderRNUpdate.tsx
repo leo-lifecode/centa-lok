@@ -62,26 +62,27 @@ export default function OrderRNUpdate() {
     subtotalAmount: 0,
   });
   const subtotalAmount = Form.useWatch('subtotalAmount', form) || 0;
-  const totalPajak = dataSourcePajak.reduce(
-    (total, tax) => total + Number(subtotalAmount) * Number(tax.taxValue || 0),
-    0
-  );
+  const totalPajak = dataSourcePajak.reduce((total, tax) => {
+    const taxType = String(tax.taxType || '').toUpperCase();
+    return taxType.includes('PPN')
+      ? total + Number(subtotalAmount) * Number(tax.taxValue || 0)
+      : total;
+  }, 0);
   const totalSetelahPajak = Number(subtotalAmount) + totalPajak;
   const dataSourcePajakDisplay = dataSourcePajak.map((tax) => ({
     ...tax,
+    // Nominal pajak mengikuti tarif master; hanya PPN menambah total tagihan seperti RA.
     taxAmount: Number(subtotalAmount) * Number(tax.taxValue || 0),
   }));
 
   const handleSetDataSourcePajak = (updater: any) => {
     setDataSourcePajak((previous) => {
       const next = typeof updater === 'function' ? updater(previous) : updater;
-      const ppnOnly = next.filter((tax: any) =>
-        String(tax.taxType || '').toUpperCase().includes('PPN')
+      // Satu master pajak hanya boleh dipilih sekali dalam satu Purchase Order.
+      return next.filter(
+        (tax: any, index: number, taxes: any[]) =>
+          taxes.findIndex((item) => (item.taxId || item.id) === (tax.taxId || tax.id)) === index
       );
-      if (ppnOnly.length !== next.length) {
-        showNotification('warning', 'Pajak tidak ditambahkan', 'Pesanan RN hanya mendukung PPN.');
-      }
-      return ppnOnly;
     });
   };
 
@@ -271,7 +272,7 @@ export default function OrderRNUpdate() {
         const data = await OrderPraAxios.fetchDataOrderPraById(id);
         setDataPO(data);
         setDataSourceItems(data?.items || []);
-        setDataSourcePajak((data?.PurchaseOrderTax || []).filter((tax: any) => String(tax.taxType || '').toUpperCase().includes('PPN')));
+        setDataSourcePajak(data?.PurchaseOrderTax || []);
         form.setFieldsValue({
           orderNumber: data.orderNumber,
           customerId: data.customerId,
@@ -645,7 +646,7 @@ export default function OrderRNUpdate() {
                 placeholder={'Harga total'}
               />
             </Form.Item>
-            <Form.Item label="Total setelah PPN">
+            <Form.Item label="Total setelah Pajak">
               <InputNumber
                 value={totalSetelahPajak}
                 prefix={<span>Rp</span>}
@@ -704,7 +705,7 @@ export default function OrderRNUpdate() {
                 }))
               }
             >
-              Tambah PPN
+              Tambah Pajak
             </Button>
           </div>
           <Table
