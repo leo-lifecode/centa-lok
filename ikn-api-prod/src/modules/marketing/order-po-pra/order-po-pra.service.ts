@@ -16,8 +16,8 @@ export class OrderPoPraService {
 	/**
 	 * Validasi pajak RN berdasarkan master Tax yang aktif.
 	 * Mengikuti perilaku perhitungan Purchase Order RA saat ini:
-	 * PPN menambah total tagihan, sedangkan jenis pajak lain disimpan
-	 * sebagai pilihan pajak tanpa menambah total sampai aturan hitungnya ditetapkan.
+	 * Semua nominal pajak dihitung dari tarif master seperti form RA.
+	 * Hanya PPN yang menambah total tagihan, mengikuti perilaku PO RA saat ini.
 	 */
 	private async prepareRnTaxes(
 		client: Prisma.TransactionClient,
@@ -65,21 +65,23 @@ export class OrderPoPraService {
 				throw new BadRequestException('Data master pajak tidak valid');
 			}
 
-			const isPpn = taxType.toUpperCase().includes('PPN');
 			return {
 				taxId: masterTax.id,
 				taxType,
 				taxValue,
-				taxAmount: isPpn ? subtotal * taxValue : 0,
+				taxAmount: subtotal * taxValue,
 			};
 		});
 
 		const taxAmount = normalizedTaxes.reduce((total, tax) => total + tax.taxAmount, 0);
+		const ppnAmount = normalizedTaxes
+			.filter((tax) => tax.taxType.toUpperCase().includes('PPN'))
+			.reduce((total, tax) => total + tax.taxAmount, 0);
 
 		return {
 			taxes: normalizedTaxes,
 			taxAmount,
-			totalAmount: subtotal + taxAmount,
+			totalAmount: subtotal + ppnAmount,
 		};
 	}
 
