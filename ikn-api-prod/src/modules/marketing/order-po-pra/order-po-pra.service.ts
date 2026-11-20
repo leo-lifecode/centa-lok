@@ -1,9 +1,10 @@
-import { Injectable, Scope } from '@nestjs/common';
+import { BadRequestException, Injectable, Scope } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { nowWIBString } from '@src/shared/utils/glolabalFunc';
 import dayjs from 'dayjs';
-import { CreateOrderPoPraDto } from './dto/create-order-po-pra.dto';
+import { CreateOrderPoPraDto, PurchaseOrderTaxDto } from './dto/create-order-po-pra.dto';
 import { GetOrderPoPRADto } from './dto/get-order-po-pra.dto';
 import { UpdateFIleBLOrderPoPraDto } from './dto/update-bl-order-po-pra.dto';
 import { UpdateOrderPoPraDto } from './dto/update-order-po-pra.dto';
@@ -12,9 +13,86 @@ import { UpdateOrderPoPraDto } from './dto/update-order-po-pra.dto';
 export class OrderPoPraService {
 	constructor(private readonly prisma: PrismaService) {}
 
-	create(createOrderPoRubberDto: CreateOrderPoPraDto, decoded: DecodeTokenType) {
+	/**
+	 * Validasi pajak RN berdasarkan master Tax yang aktif.
+	 * Mengikuti perilaku perhitungan Purchase Order RA saat ini:
+	 * Semua nominal pajak dihitung dari tarif master seperti form RA.
+	 * Hanya PPN yang menambah total tagihan, mengikuti perilaku PO RA saat ini.
+	 */
+	private async prepareRnTaxes(
+		client: Prisma.TransactionClient,
+		taxes: PurchaseOrderTaxDto[] | undefined,
+		subtotalAmount: number,
+	) {
+		const subtotal = Number(subtotalAmount);
+		if (!Number.isFinite(subtotal) || subtotal < 0) {
+			throw new BadRequestException('Subtotal pesanan RN tidak valid');
+		}
+
+		const requestedTaxes = taxes ?? [];
+		if (!Array.isArray(requestedTaxes)) {
+			throw new BadRequestException('Format pajak tidak valid');
+		}
+
+		const taxIds = requestedTaxes.map((tax) => tax.taxId);
+		if (taxIds.some((id) => !id) || new Set(taxIds).size !== taxIds.length) {
+			throw new BadRequestException('Data pajak RN kosong atau duplikat');
+		}
+
+		if (taxIds.length === 0) {
+			return { taxes: [], taxAmount: 0, totalAmount: subtotal };
+		}
+
+		const masterTaxes = await client.tax.findMany({
+			where: {
+				id: { in: taxIds },
+				isActive: true,
+				deletedAt: null,
+			},
+		});
+
+		if (masterTaxes.length !== taxIds.length) {
+			throw new BadRequestException('Master pajak tidak ditemukan atau sudah tidak aktif');
+		}
+
+		const masterTaxById = new Map(masterTaxes.map((tax) => [tax.id, tax]));
+		const normalizedTaxes = requestedTaxes.map((requestedTax) => {
+			const masterTax = masterTaxById.get(requestedTax.taxId);
+			const taxValue = Number(masterTax?.taxValue);
+			const taxType = String(masterTax?.taxType || '').trim();
+
+			if (!masterTax || !taxType || !Number.isFinite(taxValue) || taxValue < 0) {
+				throw new BadRequestException('Data master pajak tidak valid');
+			}
+
+			return {
+				taxId: masterTax.id,
+				taxType,
+				taxValue,
+				taxAmount: subtotal * taxValue,
+			};
+		});
+
+		const taxAmount = normalizedTaxes.reduce((total, tax) => total + tax.taxAmount, 0);
+		const ppnAmount = normalizedTaxes
+			.filter((tax) => tax.taxType.toUpperCase().includes('PPN'))
+			.reduce((total, tax) => total + tax.taxAmount, 0);
+
+		return {
+			taxes: normalizedTaxes,
+			taxAmount,
+			totalAmount: subtotal + ppnAmount,
+		};
+	}
+
+	async create(createOrderPoRubberDto: CreateOrderPoPraDto, decoded: DecodeTokenType) {
 		try {
-			return this.prisma.purchaseOrder.create({
+			return this.prisma.$transaction(async (tx) => {
+				const rnTaxData = createOrderPoRubberDto.typePo === 'RN'
+					? await this.prepareRnTaxes(tx, createOrderPoRubberDto.taxes, Number(createOrderPoRubberDto.subtotalAmount))
+					: null;
+
+				return tx.purchaseOrder.create({
 				data: {
 					orderNumber: createOrderPoRubberDto.orderNumber,
 					date: createOrderPoRubberDto.date,
@@ -27,8 +105,8 @@ export class OrderPoPraService {
 					fileUrlEkspor: createOrderPoRubberDto.fileUrlEkspor,
 					fileUrlProduksi: createOrderPoRubberDto.fileUrlProduksi,
 					subtotalAmount: +createOrderPoRubberDto.subtotalAmount,
-					taxAmount: createOrderPoRubberDto?.taxes?.reduce((total, tax) => total + Number(tax.taxAmount), 0) ?? 0,
-					totalAmount: createOrderPoRubberDto.totalAmount != null ? Number(createOrderPoRubberDto.totalAmount) : 0,
+					taxAmount: rnTaxData?.taxAmount ?? createOrderPoRubberDto?.taxes?.reduce((total, tax) => total + Number(tax.taxAmount), 0) ?? 0,
+					totalAmount: rnTaxData?.totalAmount ?? (createOrderPoRubberDto.totalAmount != null ? Number(createOrderPoRubberDto.totalAmount) : 0),
 					customerName: createOrderPoRubberDto.customerName,
 					customerId: createOrderPoRubberDto.customerId,
 					staffId: decoded.id,
@@ -65,7 +143,7 @@ export class OrderPoPraService {
 						})),
 					},
 					PurchaseOrderTax: {
-						create: createOrderPoRubberDto?.taxes?.map((tax) => ({
+						create: (rnTaxData?.taxes ?? createOrderPoRubberDto?.taxes)?.map((tax) => ({
 							taxId: tax.taxId,
 							taxType: tax.taxType,
 							taxValue: Number(tax.taxValue),
@@ -77,6 +155,7 @@ export class OrderPoPraService {
 					items: true,
 					PurchaseOrderTax: true,
 				},
+				});
 			});
 		} catch (e) {
 			throw e;
@@ -282,6 +361,19 @@ export class OrderPoPraService {
 					where: { id: id },
 				});
 
+				const existingRnTaxes = currentOrder.typePo === 'RN' && updateOrderPoPraDto.taxes === undefined
+					? await tx.purchaseOrderTax.findMany({ where: { purchaseOrderId: id } })
+					: undefined;
+				const taxesForUpdate = updateOrderPoPraDto.taxes ?? existingRnTaxes?.map((tax) => ({
+					taxId: tax.taxId,
+					taxType: tax.taxType,
+					taxValue: tax.taxValue,
+					taxAmount: tax.taxAmount,
+				}));
+				const rnTaxData = currentOrder.typePo === 'RN'
+					? await this.prepareRnTaxes(tx, taxesForUpdate, Number(updateOrderPoPraDto.subtotalAmount))
+					: null;
+
 				// 2. Hapus items dan additionalCharges lama
 				await tx.purchaseOrderItem.deleteMany({
 					where: { purchaseOrderId: id },
@@ -305,16 +397,8 @@ export class OrderPoPraService {
 						fileUrlEkspor: updateOrderPoPraDto.fileUrlEkspor,
 						fileUrlProduksi: updateOrderPoPraDto.fileUrlProduksi,
 						subtotalAmount: +updateOrderPoPraDto.subtotalAmount,
-						totalAmount: +updateOrderPoPraDto.totalAmount,
-						...(currentOrder.typePo === 'RN'
-							? {
-								taxAmount:
-									updateOrderPoPraDto.taxes?.reduce(
-										(total, tax) => total + Number(tax.taxAmount),
-										0,
-									) ?? 0,
-							}
-							: {}),
+						totalAmount: rnTaxData?.totalAmount ?? Number(updateOrderPoPraDto.totalAmount),
+						...(rnTaxData ? { taxAmount: rnTaxData.taxAmount } : {}),
 						customerName: updateOrderPoPraDto.customerName,
 						customerId: updateOrderPoPraDto.customerId,
 						staffId: decoded.id,
@@ -357,9 +441,9 @@ export class OrderPoPraService {
 						where: { purchaseOrderId: id },
 					});
 
-					if (updateOrderPoPraDto.taxes && updateOrderPoPraDto.taxes.length > 0) {
+					if (rnTaxData && rnTaxData.taxes.length > 0) {
 						await tx.purchaseOrderTax.createMany({
-							data: updateOrderPoPraDto.taxes.map((tax) => ({
+							data: rnTaxData.taxes.map((tax) => ({
 								purchaseOrderId: id,
 								taxId: tax.taxId,
 								taxType: tax.taxType,

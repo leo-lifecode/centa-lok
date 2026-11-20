@@ -134,7 +134,7 @@ export default function ModalPajakRN({
     limit: 5,
     total: 0,
     loading: false,
-    taxType: 'PPN',
+    taxType: '',
     taxValue: 0,
   });
 
