@@ -16,6 +16,7 @@ import {
   Tooltip,
 } from 'antd';
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import * as OrderPraAxios from '@pages/marketing/order-pra/service/OrderPraAxios';
 import { useNavigate, useParams } from 'react-router';
 import * as globalHelpers from '@/utils/helper';
@@ -39,6 +40,7 @@ import { handleDate, handleMessageError } from '@/utils/func/func';
 
 export default function OrderRNUpdate() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id } = useParams();
   const [form] = Form.useForm();
   const [formItems] = Form.useForm();
@@ -235,6 +237,8 @@ export default function OrderRNUpdate() {
           })),
         };
         await OrderPraAxios.updateOrderPra(id, values);
+        // Sinkronkan cache daftar PRN agar data terbaru tampil setelah kembali dari form edit.
+        await queryClient.invalidateQueries({ queryKey: ['order-rn'] });
         showNotification('success', 'Berhasil', 'Berhasil Ubah Data');
         setTimeout(() => {
           navigate('/po-order-prn');
