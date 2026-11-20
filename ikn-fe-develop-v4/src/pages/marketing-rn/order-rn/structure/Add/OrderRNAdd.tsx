@@ -20,6 +20,7 @@ import * as globalInterfaces from '@/utils/interfaces/interfacesGlobal';
 import { handleDate, handleMessageError } from '@/utils/func/func';
 import dayjs from 'dayjs';
 import { useAppNavigate } from '@/hooks/React/useAppNavigate';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEffect } from '@/hooks/React/useEffect';
 import { Button, Card, DatePicker, Input, InputNumber, Table } from '@/components/ui';
@@ -29,6 +30,7 @@ import { OrderRNInterfacesHistory } from '../../interface/OrderRNInterfacesHisto
 
 export default function OrderRNAdd() {
   const navigate = useAppNavigate();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [formItems] = Form.useForm();
   const [openDrawer, seOpenDrawer] = useState<boolean>(false);
@@ -167,6 +169,8 @@ export default function OrderRNAdd() {
         throw new Error('Failed to upload file');
       }
       await OrderRNAxios.posOrderRN(values);
+      // Segarkan seluruh variasi query daftar PO RN setelah data baru tersimpan.
+      await queryClient.invalidateQueries({ queryKey: ['order-rn'] });
       showNotification('success', 'Berhasil', 'Berhasil Menambahkan Data');
       setTimeout(() => {
         navigate('/po-order-prn');
