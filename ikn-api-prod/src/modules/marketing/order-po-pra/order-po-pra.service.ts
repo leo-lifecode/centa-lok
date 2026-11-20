@@ -14,8 +14,10 @@ export class OrderPoPraService {
 	constructor(private readonly prisma: PrismaService) {}
 
 	/**
-	 * RN hanya menerima PPN. Nilai tarif diambil dari master Tax di database,
-	 * bukan dipercaya dari payload frontend.
+	 * Validasi pajak RN berdasarkan master Tax yang aktif.
+	 * Mengikuti perilaku perhitungan Purchase Order RA saat ini:
+	 * PPN menambah total tagihan, sedangkan jenis pajak lain disimpan
+	 * sebagai pilihan pajak tanpa menambah total sampai aturan hitungnya ditetapkan.
 	 */
 	private async prepareRnTaxes(
 		client: Prisma.TransactionClient,
@@ -32,10 +34,6 @@ export class OrderPoPraService {
 			throw new BadRequestException('Format pajak tidak valid');
 		}
 
-		if (requestedTaxes.some((tax) => String(tax.taxType).trim().toUpperCase() !== 'PPN')) {
-			throw new BadRequestException('Pesanan RN hanya mendukung pajak PPN');
-		}
-
 		const taxIds = requestedTaxes.map((tax) => tax.taxId);
 		if (taxIds.some((id) => !id) || new Set(taxIds).size !== taxIds.length) {
 			throw new BadRequestException('Data pajak RN kosong atau duplikat');
@@ -48,30 +46,31 @@ export class OrderPoPraService {
 		const masterTaxes = await client.tax.findMany({
 			where: {
 				id: { in: taxIds },
-				taxType: 'PPN',
 				isActive: true,
 				deletedAt: null,
 			},
 		});
 
 		if (masterTaxes.length !== taxIds.length) {
-			throw new BadRequestException('Master pajak PPN tidak ditemukan atau sudah tidak aktif');
+			throw new BadRequestException('Master pajak tidak ditemukan atau sudah tidak aktif');
 		}
 
 		const masterTaxById = new Map(masterTaxes.map((tax) => [tax.id, tax]));
-		const normalizedTaxes = requestedTaxes.map((tax) => {
-			const masterTax = masterTaxById.get(tax.taxId);
+		const normalizedTaxes = requestedTaxes.map((requestedTax) => {
+			const masterTax = masterTaxById.get(requestedTax.taxId);
 			const taxValue = Number(masterTax?.taxValue);
+			const taxType = String(masterTax?.taxType || '').trim();
 
-			if (!masterTax || !Number.isFinite(taxValue) || taxValue < 0) {
-				throw new BadRequestException('Tarif master PPN tidak valid');
+			if (!masterTax || !taxType || !Number.isFinite(taxValue) || taxValue < 0) {
+				throw new BadRequestException('Data master pajak tidak valid');
 			}
 
+			const isPpn = taxType.toUpperCase().includes('PPN');
 			return {
 				taxId: masterTax.id,
-				taxType: 'PPN',
+				taxType,
 				taxValue,
-				taxAmount: subtotal * taxValue,
+				taxAmount: isPpn ? subtotal * taxValue : 0,
 			};
 		});
 
