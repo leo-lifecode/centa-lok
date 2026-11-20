@@ -58,16 +58,11 @@ export default function OrderRNAdd() {
       : total;
   }, 0);
   const totalSetelahPajak = Number(subtotalAmount) + totalPajak;
-  const dataSourcePajakDisplay = dataSourcePajak.map((tax) => {
-    const taxType = String(tax.taxType || '').toUpperCase();
-    return {
-      ...tax,
-      // Mengikuti perhitungan PO RA: hanya PPN menambah total tagihan.
-      taxAmount: taxType.includes('PPN')
-        ? Number(subtotalAmount) * Number(tax.taxValue || 0)
-        : 0,
-    };
-  });
+  const dataSourcePajakDisplay = dataSourcePajak.map((tax) => ({
+    ...tax,
+    // Nominal pajak mengikuti tarif master; hanya PPN menambah total tagihan seperti RA.
+    taxAmount: Number(subtotalAmount) * Number(tax.taxValue || 0),
+  }));
 
   const handleSetDataSourcePajak = (updater: any) => {
     setDataSourcePajak((previous) => {
