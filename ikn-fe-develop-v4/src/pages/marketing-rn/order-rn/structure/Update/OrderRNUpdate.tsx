@@ -277,7 +277,7 @@ export default function OrderRNUpdate() {
         const data = await OrderPraAxios.fetchDataOrderPraById(id);
         setDataPO(data);
         setDataSourceItems(data?.items || []);
-        setDataSourcePajak((data?.PurchaseOrderTax || []).filter((tax: any) => String(tax.taxType || '').toUpperCase().includes('PPN')));
+        setDataSourcePajak(data?.PurchaseOrderTax || []);
         form.setFieldsValue({
           orderNumber: data.orderNumber,
           customerId: data.customerId,
