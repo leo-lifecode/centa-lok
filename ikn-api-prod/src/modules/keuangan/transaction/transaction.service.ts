@@ -2424,13 +2424,24 @@ export class TransactionService {
 	async remove(id: string) {
 		return this.prisma.$transaction(
 			async (tx) => {
-				const existing = await tx.cashBankTransaction.findFirstOrThrow({
-					where: { id },
+				// Hanya transaksi yang belum dihapus (cegah hapus dua kali yang menggeser saldo dua kali)
+				const existing = await tx.cashBankTransaction.findFirst({
+					where: { id, deletedAt: null },
 					include: {
-						journalEntry: { include: { details: true } },
+						// Hanya jurnal aktif
+						journalEntry: { where: { deletedAt: null }, include: { details: true } },
 						cashBankTransactionDetails: true,
 					},
 				});
+
+				if (!existing) {
+					throw new NotFoundException('Transaksi tidak ditemukan.');
+				}
+
+				// Aksi hapus harus diaktifkan lebih dulu (sama dengan aturan tombol di frontend)
+				if (!existing.isActionEnabled) {
+					throw new BadRequestException('Aksi hapus belum diaktifkan untuk transaksi ini.');
+				}
 
 				const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
 				const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
@@ -2439,19 +2450,30 @@ export class TransactionService {
 					throw new BadRequestException('Jurnal utama tidak ditemukan.');
 				}
 
+				// Syarat hapus: jurnal belum diposting (DRAFT, atau sudah di-Revert).
 				if (mainJournal.isPosted) {
-					throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+					throw new BadRequestException('Jurnal utama sudah terpost, transaksi tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
 				}
 
 				if (mirrorJournal?.isPosted) {
-					throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+					throw new BadRequestException('Jurnal mirror unit sudah terpost, transaksi tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
 				}
 
 				// =====================================================
 				// REVERSE SALDO BANK
 				// =====================================================
 				if (existing.bank_account_id) {
-					if (existing.currency === 'DOLLAR') {
+					if (existing.type === 'CASH_OUT') {
+						// Kas keluar mengurangi saldo saat dibuat, jadi saat dihapus saldo dikembalikan.
+						await tx.bankAccount.update({
+							where: { id: existing.bank_account_id },
+							data: {
+								currentBalance: {
+									increment: existing.amountInIDR || 0,
+								},
+							},
+						});
+					} else if (existing.currency === 'DOLLAR') {
 						// Kembalikan saldo Rupiah dan Dollar
 						await tx.bankAccount.update({
 							where: { id: existing.bank_account_id },
@@ -2504,27 +2526,29 @@ export class TransactionService {
 				}
 
 				// =====================================================
-				// HAPUS JURNAL DAN DETAIL
+				// HAPUS JURNAL DAN DETAIL (SOFT DELETE)
+				// Jurnal + detail diberi deletedAt agar jejak audit tetap ada.
+				// numberJurnal diganti UUID karena kolomnya unik, supaya nomor lama bisa dipakai lagi.
+				// Saran penyesuaian tidak punya deletedAt, jadi dihapus permanen.
 				// =====================================================
+				const journalIds = [mainJournal.id, ...(mirrorJournal ? [mirrorJournal.id] : [])];
+
 				await tx.journalAdjustmentSuggestion.deleteMany({
-					where: { transactionId: id },
+					where: { OR: [{ transactionId: id }, { journalEntryId: { in: journalIds } }] },
 				});
 
-				await tx.journalEntryDetail.deleteMany({
-					where: { journalEntryId: mainJournal.id },
+				await tx.journalEntryDetail.updateMany({
+					where: { journalEntryId: { in: journalIds } },
+					data: { deletedAt: nowWIBString() },
 				});
 
-				await tx.journalEntry.delete({
-					where: { id: mainJournal.id },
-				});
-
-				if (mirrorJournal) {
-					await tx.journalEntryDetail.deleteMany({
-						where: { journalEntryId: mirrorJournal.id },
-					});
-
-					await tx.journalEntry.delete({
-						where: { id: mirrorJournal.id },
+				for (const journalId of journalIds) {
+					await tx.journalEntry.update({
+						where: { id: journalId },
+						data: {
+							numberJurnal: crypto.randomUUID(),
+							deletedAt: nowWIBString(),
+						},
 					});
 				}
 
