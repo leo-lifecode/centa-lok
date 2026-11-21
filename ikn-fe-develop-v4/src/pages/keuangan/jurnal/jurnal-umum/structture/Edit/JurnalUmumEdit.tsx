@@ -32,7 +32,7 @@ import ButtonAdd from '@/components/atoms/button/buttonAdd';
 import { showNotification } from '@/contexts/services/notificationService';
 import { TagChevron } from '@phosphor-icons/react';
 import ModalAccount from '@/components/ModalAccount/ModalAccount';
-import { handleDate } from '@/utils/func/func';
+import { handleDate, handleMessageError } from '@/utils/func/func';
 
 const JurnalUmumEdit: React.FC = () => {
   const { id } = useParams();
@@ -253,6 +253,11 @@ const JurnalUmumEdit: React.FC = () => {
       if (hasEmptyCOA) {
         return showNotification('warning', 'Peringatan', 'Semua entri harus memiliki akun COA');
       }
+      // Backend menolak baris tanpa unit, jadi cek di sini agar user tahu penyebabnya.
+      const hasEmptyUnit = details.some((entry) => !entry.unitId);
+      if (hasEmptyUnit) {
+        return showNotification('warning', 'Peringatan', 'Semua baris harus memiliki unit');
+      }
       setLoading(true);
       const payload = {
         ...values,
@@ -282,7 +287,9 @@ const JurnalUmumEdit: React.FC = () => {
       }
     } catch (e) {
       setLoading(false);
-      showNotification('error', 'Gagal', 'Terjadi Kesalahan');
+      // Tampilkan alasan asli dari backend (mis. validasi atau jurnal sudah diposting)
+      const message = handleMessageError(e, 'Edit Data Gagal');
+      showNotification('error', 'Gagal', Array.isArray(message) ? message.join(', ') : message);
     }
   };
 
@@ -375,7 +382,7 @@ const JurnalUmumEdit: React.FC = () => {
         <Table
           dataSource={details}
           columns={columns}
-          rowKey="id"
+          rowKey={(record) => (record.isNew ? record.key : record.id)}
           pagination={false}
           style={{ marginTop: 24 }}
           scroll={{ x: 'max-contents' }}
