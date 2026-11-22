@@ -1,4 +1,4 @@
-import { Injectable, Scope } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Scope } from '@nestjs/common';
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
@@ -636,6 +636,18 @@ export class JurnalEntryService {
 	async update(journalEntryId: string, updateJurnalEntryDto: UpdateteJurnalEntryDto) {
 		try {
 			return this.prisma.$transaction(async (tx) => {
+				// Jurnal yang sudah diposting tidak boleh diubah, Revert dulu.
+				const current = await tx.journalEntry.findFirst({
+					where: { id: journalEntryId, deletedAt: null },
+					select: { isPosted: true },
+				});
+				if (!current) {
+					throw new NotFoundException('Jurnal tidak ditemukan');
+				}
+				if (current.isPosted) {
+					throw new BadRequestException('Jurnal sudah diposting, tidak dapat diubah. Revert dulu.');
+				}
+
 				await tx.journalEntry.update({
 					where: {
 						id: journalEntryId,
@@ -733,9 +745,29 @@ export class JurnalEntryService {
 
 	remove(id: string) {
 		return this.prisma.$transaction(async (tx) => {
+			// ---- SYARAT HAPUS: jurnal ada dan belum diposting (DRAFT atau sudah di-Revert) ----
+			const target = await tx.journalEntry.findFirst({
+				where: { id, deletedAt: null },
+				select: { isPosted: true },
+			});
+			if (!target) {
+				throw new NotFoundException('Jurnal tidak ditemukan');
+			}
+			if (target.isPosted) {
+				throw new BadRequestException('Jurnal sudah diposting, tidak dapat dihapus. Revert dulu.');
+			}
+
 			// ---- DELETE DETAIL CHILD ----
 			const journal = await tx.journalEntry.findMany({
-				where: { journalEntryId: id },
+				where: { journalEntryId: id, deletedAt: null },
+			});
+			if (journal.some((item) => item.isPosted)) {
+				throw new BadRequestException('Jurnal turunan sudah diposting, tidak dapat dihapus. Revert dulu.');
+			}
+
+			// ---- SARAN PENYESUAIAN (tanpa deletedAt, dihapus permanen) ----
+			await tx.journalAdjustmentSuggestion.deleteMany({
+				where: { journalEntryId: { in: [id, ...journal.map((item) => item.id)] } },
 			});
 
 			for (const item of journal) {
