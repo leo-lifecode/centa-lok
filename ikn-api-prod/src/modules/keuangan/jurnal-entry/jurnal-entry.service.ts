@@ -654,7 +654,7 @@ export class JurnalEntryService {
 					},
 					data: {
 						date: updateJurnalEntryDto.date,
-						// description: updateJurnalEntryDto.description,
+						description: updateJurnalEntryDto.description,
 						addjust: true,
 						referenceNumber: updateJurnalEntryDto.referenceNumber,
 						numberJurnal: updateJurnalEntryDto.numberJurnal,
