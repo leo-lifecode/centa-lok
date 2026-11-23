@@ -98,8 +98,9 @@ export default function CrossChekPajakRNAdd() {
         }));
 
       const payload = {
-        totalAmounTax: values.totalAmounTax,
-        totalAmount: values.totalAmount,
+        // Pastikan angka (nilai Decimal dari backend bisa berupa string).
+        totalAmounTax: Number(values.totalAmounTax),
+        totalAmount: Number(values.totalAmount),
         purchaseOrderId: values.purchaseOrderId,
         orderNumber: values.orderNumber,
         taxes: dataSourcePajakNew,
@@ -266,8 +267,8 @@ export default function CrossChekPajakRNAdd() {
           subtotalAmount: data.subtotalAmount,
           // spbId: data.id,
           purchaseOrderId: data.id,
-          totalAmount: data.totalAmount + totalPPh22 + totalPPh23,
-          totalAmounTax: data.totalAmount + totalPPh22 + totalPPh23,
+          totalAmount: Number(data.totalAmount) + totalPPh22 + totalPPh23,
+          totalAmounTax: Number(data.totalAmount) + totalPPh22 + totalPPh23,
         });
       }
       setLoading(false);
