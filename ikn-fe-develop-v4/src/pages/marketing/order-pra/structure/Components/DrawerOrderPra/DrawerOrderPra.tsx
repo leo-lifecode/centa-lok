@@ -89,7 +89,7 @@ export default function DrawerOrderPra({
 
   return (
     <Drawer
-      title="Imput Items Order RA"
+      title="Input Items Order RA"
       placement={'right'}
       width={500}
       onClose={onClose}

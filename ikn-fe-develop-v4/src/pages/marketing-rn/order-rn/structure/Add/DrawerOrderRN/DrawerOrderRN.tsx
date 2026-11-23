@@ -87,7 +87,7 @@ export default function DrawerOrderRN({
 
   return (
     <Drawer
-      title="Imput Items Order RN"
+      title="Input Items Order RN"
       placement={'right'}
       width={500}
       onClose={onClose}
