@@ -628,6 +628,9 @@ model CashBankTransaction {
   deletedAt                  DateTime?
   createdAt                  DateTime                     @default(now())
   isActionEnabled            Boolean                      @default(false)
+  receivedFrom               String?
+  purpose                    String?
+  materialId                 String?
   account                    Account?                     @relation(fields: [accountCode], references: [code])
   bank_account               BankAccount?                 @relation(fields: [bank_account_id], references: [id])
   invoiceEkspor              InvoiceEkspor?               @relation(fields: [invoiceEksporId], references: [id])
@@ -637,6 +640,8 @@ model CashBankTransaction {
   cashBankTransactionDetails CashBankTransactionDetails[]
   journalEntry               JournalEntry[]
   withholdingTaxes           WithholdingTax[]
+
+  @@index([materialId])
 }
 
 model CashBankTransactionDetails {

@@ -75,6 +75,34 @@ export class CreateTransactionDto {
 	@ApiProperty({ description: 'description', type: String })
 	description: string;
 
+	@Validators.IsString()
+	@Validators.IsOptional()
+	@ApiProperty({ description: 'Penerima', type: String, required: false })
+	to?: string;
+
+	@Validators.IsString()
+	@Validators.IsOptional()
+	@ApiProperty({ description: 'Alamat Penerima', type: String, required: false })
+	address?: string;
+
+	@Validators.IsString()
+	@Validators.IsOptional()
+	@ApiProperty({
+		description: 'Diterima dari',
+		type: String,
+		required: false,
+	})
+	receivedFrom?: string;
+
+	@Validators.IsString()
+	@Validators.IsOptional()
+	@ApiProperty({
+		description: 'Untuk',
+		type: String,
+		required: false,
+	})
+	purpose?: string;
+
 	@Validators.IsString({ message: 'accountCode harus string' })
 	@Validators.IsOptional()
 	@ApiProperty({ description: 'accountCode', type: String, example: 'kas | bank' })

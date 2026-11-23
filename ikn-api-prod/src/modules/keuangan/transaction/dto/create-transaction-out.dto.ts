@@ -93,7 +93,8 @@ export class CreateCashOutFlowDto extends OmitType(CreateTransactionDto, ['invoi
 	@ApiProperty({ description: 'BankaccountCode', type: String })
 	BankaccountCode: string;
 
-	@Validators.ValidateNested()
+	@Validators.IsArray()
+	@Validators.ValidateNested({ each: true })
 	@Transformers.Type(() => CashBankTransactionDetails)
 	@ApiProperty({ type: [CashBankTransactionDetails] })
 	cashBankTransactionDetails: CashBankTransactionDetails[];

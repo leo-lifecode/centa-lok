@@ -109,6 +109,8 @@ export class TransactionService {
 							grossAmount: 0,
 							type: 'CASH_IN',
 							description: createTransactionDto.description,
+							receivedFrom: createTransactionDto.receivedFrom ?? null,
+							purpose: createTransactionDto.purpose ?? null,
 							administrasiAmount: createTransactionDto.administrasiAmount,
 							bank_account_id: createTransactionDto.bank_account_id,
 
@@ -311,6 +313,8 @@ export class TransactionService {
 						grossAmount: invoice.totalAmount,
 						type: 'CASH_IN',
 						description: createTransactionDto.description,
+						receivedFrom: createTransactionDto.receivedFrom ?? null,
+						purpose: createTransactionDto.purpose ?? null,
 						administrasiAmount: createTransactionDto.administrasiAmount,
 						bank_account_id: createTransactionDto.bank_account_id,
 						invoiceId: createTransactionDto.invoiceId,
@@ -497,6 +501,8 @@ export class TransactionService {
 							grossAmount: 0,
 							type: 'CASH_IN',
 							description: createTransactionDto.description,
+							receivedFrom: createTransactionDto.receivedFrom ?? null,
+							purpose: createTransactionDto.purpose ?? null,
 							administrasiAmount: createTransactionDto?.administrasiAmount || 0,
 							bank_account_id: createTransactionDto.bank_account_id,
 							invoiceEksporId: null,
@@ -664,6 +670,8 @@ export class TransactionService {
 						grossAmount: invoice.totalCIF,
 						type: 'CASH_IN',
 						description: createTransactionDto.description,
+						receivedFrom: createTransactionDto.receivedFrom ?? null,
+						purpose: createTransactionDto.purpose ?? null,
 						administrasiAmount: createTransactionDto?.administrasiAmount || 0,
 						bank_account_id: createTransactionDto.bank_account_id,
 						invoiceEksporId: createTransactionDto.invoiceId,
@@ -858,6 +866,8 @@ export class TransactionService {
 							grossAmount: 0,
 							type: 'CASH_IN',
 							description: createTransactionDto.description,
+							receivedFrom: createTransactionDto.receivedFrom,
+							purpose: createTransactionDto.purpose,
 							administrasiAmount: createTransactionDto.administrasiAmount || 0,
 							bank_account_id: createTransactionDto.bank_account_id,
 							invoiceEksporId: null,
@@ -1189,6 +1199,8 @@ export class TransactionService {
 						grossAmount: invoice.totalCIF,
 						type: 'CASH_IN',
 						description: createTransactionDto.description,
+						receivedFrom: createTransactionDto.receivedFrom,
+						purpose: createTransactionDto.purpose,
 						administrasiAmount: createTransactionDto.administrasiAmount,
 						bank_account_id: createTransactionDto.bank_account_id,
 						invoiceEksporId: createTransactionDto.invoiceId,
@@ -1893,6 +1905,8 @@ export class TransactionService {
 							exchangeRate: updateTransactionDto.exchangeRate,
 							date: updateTransactionDto.date,
 							description: updateTransactionDto.description,
+							receivedFrom: updateTransactionDto.receivedFrom,
+							purpose: updateTransactionDto.purpose,
 							administrasiAmount: updateTransactionDto.administrasiAmount,
 							bank_account_id: updateTransactionDto.bank_account_id,
 							invoiceId: null,
@@ -2194,6 +2208,8 @@ export class TransactionService {
 						exchangeRate: updateTransactionDto.exchangeRate,
 						date: updateTransactionDto.date,
 						description: updateTransactionDto.description,
+						receivedFrom: updateTransactionDto.receivedFrom,
+						purpose: updateTransactionDto.purpose,
 						administrasiAmount: updateTransactionDto.administrasiAmount,
 						bank_account_id: updateTransactionDto.bank_account_id,
 						invoiceId: updateTransactionDto.invoiceId,
@@ -2424,24 +2440,13 @@ export class TransactionService {
 	async remove(id: string) {
 		return this.prisma.$transaction(
 			async (tx) => {
-				// Hanya transaksi yang belum dihapus (cegah hapus dua kali yang menggeser saldo dua kali)
-				const existing = await tx.cashBankTransaction.findFirst({
-					where: { id, deletedAt: null },
+				const existing = await tx.cashBankTransaction.findFirstOrThrow({
+					where: { id },
 					include: {
-						// Hanya jurnal aktif
-						journalEntry: { where: { deletedAt: null }, include: { details: true } },
+						journalEntry: { include: { details: true } },
 						cashBankTransactionDetails: true,
 					},
 				});
-
-				if (!existing) {
-					throw new NotFoundException('Transaksi tidak ditemukan.');
-				}
-
-				// Aksi hapus harus diaktifkan lebih dulu (sama dengan aturan tombol di frontend)
-				if (!existing.isActionEnabled) {
-					throw new BadRequestException('Aksi hapus belum diaktifkan untuk transaksi ini.');
-				}
 
 				const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
 				const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
@@ -2450,30 +2455,19 @@ export class TransactionService {
 					throw new BadRequestException('Jurnal utama tidak ditemukan.');
 				}
 
-				// Syarat hapus: jurnal belum diposting (DRAFT, atau sudah di-Revert).
 				if (mainJournal.isPosted) {
-					throw new BadRequestException('Jurnal utama sudah terpost, transaksi tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
+					throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
 				}
 
 				if (mirrorJournal?.isPosted) {
-					throw new BadRequestException('Jurnal mirror unit sudah terpost, transaksi tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
+					throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
 				}
 
 				// =====================================================
 				// REVERSE SALDO BANK
 				// =====================================================
 				if (existing.bank_account_id) {
-					if (existing.type === 'CASH_OUT') {
-						// Kas keluar mengurangi saldo saat dibuat, jadi saat dihapus saldo dikembalikan.
-						await tx.bankAccount.update({
-							where: { id: existing.bank_account_id },
-							data: {
-								currentBalance: {
-									increment: existing.amountInIDR || 0,
-								},
-							},
-						});
-					} else if (existing.currency === 'DOLLAR') {
+					if (existing.currency === 'DOLLAR') {
 						// Kembalikan saldo Rupiah dan Dollar
 						await tx.bankAccount.update({
 							where: { id: existing.bank_account_id },
@@ -2526,29 +2520,27 @@ export class TransactionService {
 				}
 
 				// =====================================================
-				// HAPUS JURNAL DAN DETAIL (SOFT DELETE)
-				// Jurnal + detail diberi deletedAt agar jejak audit tetap ada.
-				// numberJurnal diganti UUID karena kolomnya unik, supaya nomor lama bisa dipakai lagi.
-				// Saran penyesuaian tidak punya deletedAt, jadi dihapus permanen.
+				// HAPUS JURNAL DAN DETAIL
 				// =====================================================
-				const journalIds = [mainJournal.id, ...(mirrorJournal ? [mirrorJournal.id] : [])];
-
 				await tx.journalAdjustmentSuggestion.deleteMany({
-					where: { OR: [{ transactionId: id }, { journalEntryId: { in: journalIds } }] },
+					where: { transactionId: id },
 				});
 
-				await tx.journalEntryDetail.updateMany({
-					where: { journalEntryId: { in: journalIds } },
-					data: { deletedAt: nowWIBString() },
+				await tx.journalEntryDetail.deleteMany({
+					where: { journalEntryId: mainJournal.id },
 				});
 
-				for (const journalId of journalIds) {
-					await tx.journalEntry.update({
-						where: { id: journalId },
-						data: {
-							numberJurnal: crypto.randomUUID(),
-							deletedAt: nowWIBString(),
-						},
+				await tx.journalEntry.delete({
+					where: { id: mainJournal.id },
+				});
+
+				if (mirrorJournal) {
+					await tx.journalEntryDetail.deleteMany({
+						where: { journalEntryId: mirrorJournal.id },
+					});
+
+					await tx.journalEntry.delete({
+						where: { id: mirrorJournal.id },
 					});
 				}
 
@@ -2558,6 +2550,143 @@ export class TransactionService {
 				});
 
 				// Soft delete transaksi utama
+				return tx.cashBankTransaction.update({
+					where: { id },
+					data: {
+						deletedAt: nowWIBString(),
+						transactionNumber: crypto.randomUUID(),
+					},
+				});
+			},
+			{
+				maxWait: 10000,
+				timeout: 15000,
+			},
+		);
+	}
+
+	async removeCashOutFlowRawMaterial(id: string) {
+		return this.prisma.$transaction(
+			async (tx) => {
+				// 1. Ambil transaksi yang akan dihapus.
+				const existing = await tx.cashBankTransaction.findFirstOrThrow({
+					where: {
+						id,
+						type: 'CASH_OUT',
+						currency: 'RP',
+						isMaterial: 'Y',
+						deletedAt: null,
+					},
+					include: {
+						journalEntry: { include: { details: true } },
+						cashBankTransactionDetails: true,
+					},
+				});
+
+				// 2. Pastikan jurnal utama dan mirror tidak terposting.
+				const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
+				const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
+
+				if (!mainJournal) {
+					throw new BadRequestException('Jurnal utama tidak ditemukan.');
+				}
+
+				if (mainJournal.isPosted) {
+					throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
+				}
+
+				if (mirrorJournal?.isPosted) {
+					throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat dihapus. Revert dulu (Jurnal Khusus).');
+				}
+
+				// 3. Kembalikan saldo rekening bank.
+				if (existing.bank_account_id) {
+					await tx.bankAccount.update({
+						where: { id: existing.bank_account_id },
+						data: {
+							currentBalance: {
+								increment: Number(existing.amountInIDR || 0),
+							},
+						},
+					});
+				}
+
+				// 4. Jika transaksi terhubung dengan Penerimaan Material,
+				// hitung ulang total pembayaran dari transaksi yang masih aktif.
+				if (existing.materialId) {
+					const dataRaw = await tx.rawMaterialReceipt.findUnique({
+						where: { id: existing.materialId },
+						include: {
+							items: {
+								where: { deletedAt: null },
+							},
+						},
+					});
+
+					if (!dataRaw) {
+						throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
+					}
+
+					// Ambil pembayaran material lain yang masih aktif.
+					const transaksiPembayaran = await tx.cashBankTransaction.findMany({
+						where: {
+							materialId: existing.materialId,
+							type: 'CASH_OUT',
+							currency: 'RP',
+							isMaterial: 'Y',
+							deletedAt: null,
+							id: { not: id },
+						},
+						select: {
+							amountInIDR: true,
+						},
+					});
+
+					// Hitung ulang pembayaran setelah transaksi ini dihapus.
+					const totalPembayaran = transaksiPembayaran.reduce((total, transaksi) => total + Number(transaksi.amountInIDR || 0), 0);
+
+					const totalTagihan = dataRaw.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+
+					await tx.rawMaterialReceipt.update({
+						where: { id: existing.materialId },
+						data: {
+							downPayment: totalPembayaran,
+							isLunas: totalPembayaran >= totalTagihan ? 'Y' : 'N',
+						},
+					});
+				}
+
+				// 5. Hapus saran jurnal terkait transaksi.
+				await tx.journalAdjustmentSuggestion.deleteMany({
+					where: { transactionId: id },
+				});
+
+				// 6. Hapus detail jurnal utama.
+				await tx.journalEntryDetail.deleteMany({
+					where: { journalEntryId: mainJournal.id },
+				});
+
+				await tx.journalEntry.delete({
+					where: { id: mainJournal.id },
+				});
+
+				// 7. Hapus jurnal mirror jika tersedia.
+				if (mirrorJournal) {
+					await tx.journalEntryDetail.deleteMany({
+						where: { journalEntryId: mirrorJournal.id },
+					});
+
+					await tx.journalEntry.delete({
+						where: { id: mirrorJournal.id },
+					});
+				}
+
+				// 8. Hapus detail transaksi kas keluar.
+				await tx.cashBankTransactionDetails.deleteMany({
+					where: { cashBankTransactionId: id },
+				});
+
+				// 9. Soft delete transaksi.
 				return tx.cashBankTransaction.update({
 					where: { id },
 					data: {
@@ -2646,71 +2775,275 @@ export class TransactionService {
 	async createCashOutFLowRawMaterial(createTransactionDto: CreateCashOutFlowDto, decoded: DecodeTokenType) {
 		return this.prisma.$transaction(
 			async (tx) => {
-				const numberJurnal = await this.createJournal();
-				//get akun bank by accountCode
-				const bankAccount = await tx.bankAccount.findFirst({
-					where: { accountCode: createTransactionDto.BankaccountCode },
-					include: { account: true }, // akun kas/bank
-				});
-				//udpate saldo bank
+				// =====================================================
+				// MODE MANUAL: KAS KELUAR MATERIAL TANPA PENERIMAAN MATERIAL
+				// =====================================================
+				if (!createTransactionDto.materialId) {
+					const bankAccount = await tx.bankAccount.findUnique({
+						where: {
+							id: createTransactionDto.bank_account_id,
+						},
+						include: {
+							account: true,
+						},
+					});
 
-				if (bankAccount) {
+					if (!bankAccount) {
+						throw new NotFoundException('Bank account tidak ditemukan.');
+					}
+
+					const numberJurnalManual = await this.createJournal();
+
+					const payAmount = Number(createTransactionDto.payAmount || 0);
+
+					// Ambil detail jurnal yang memiliki COA.
+					const cashBankTransactionDetails = (createTransactionDto.cashBankTransactionDetails || []).filter((item) =>
+						Boolean(item.accountCode),
+					);
+
+					// Kurangi saldo rekening bank.
 					await tx.bankAccount.update({
-						where: { id: bankAccount.id },
+						where: {
+							id: bankAccount.id,
+						},
 						data: {
-							currentBalance: { decrement: createTransactionDto.payAmount },
+							currentBalance: {
+								decrement: payAmount,
+							},
 						},
 					});
-				}
-				const dataRaw = await tx.rawMaterialReceipt.findUnique({
-					where: { id: createTransactionDto.materialId },
-				});
-				//check if is lunas, terdapat pembayaran bertahap
-				if (createTransactionDto.amount === createTransactionDto.payAmount) {
-					await tx.rawMaterialReceipt.update({
-						where: { id: createTransactionDto.materialId },
+
+					// Detail jurnal utama.
+					const dataJurnalDetails = cashBankTransactionDetails.map((item) => ({
+						accountCode: item.accountCode,
+						unitId: bankAccount.unitId,
+						description: item.keterangan,
+						debit: item.debit,
+						credit: item.credit,
+					}));
+
+					// Simpan transaksi manual.
+					const transaction = await tx.cashBankTransaction.create({
 						data: {
-							isLunas: 'Y',
+							staffId: decoded.id,
+							transactionNumber: createTransactionDto.transactionNumber,
+
+							amountInIDR: payAmount,
+							amountOriginal: payAmount,
+							currency: 'RP',
+							unitId: createTransactionDto.unitId,
+							date: createTransactionDto.date,
+							grossAmount: payAmount,
+							type: 'CASH_OUT',
+							isMaterial: 'Y',
+							description: createTransactionDto.description,
+							accountCode: createTransactionDto.accountCode || null,
+							bank_account_id: bankAccount.id,
+							to: createTransactionDto.to,
+							address: createTransactionDto.address,
+
+							cashBankTransactionDetails: {
+								create: cashBankTransactionDetails.map((item) => ({
+									accountCode: item.accountCode,
+									accountName: item.accountName,
+									keterangan: item.keterangan,
+									unitId: bankAccount.unitId,
+									credit: item.credit,
+									debit: item.debit,
+								})),
+							},
+
+							journalEntry: {
+								create: {
+									module: 'FINANCE',
+									date: createTransactionDto.date,
+									description: createTransactionDto.description || createTransactionDto.to,
+									purposeTransaction: createTransactionDto.to,
+									referenceNumber: createTransactionDto.transactionNumber,
+									numberJurnal: numberJurnalManual,
+									createdBy: 'System',
+									staffId: decoded.id,
+									unitId: bankAccount.unitId,
+									totalBalance: payAmount,
+
+									details: {
+										create: [
+											{
+												accountCode: bankAccount.accountCode,
+												description: bankAccount.account?.name,
+												unitId: bankAccount.unitId,
+												debit: 0,
+												credit: payAmount,
+											},
+											...dataJurnalDetails,
+										],
+									},
+								},
+							},
 						},
 					});
+
+					// Buat jurnal mirror jika unit rekening bank berbeda
+					// dengan unit transaksi.
+					if (bankAccount.unitId !== createTransactionDto.unitId) {
+						const numberJurnalMirror = await this.createJournal(2);
+
+						await tx.journalEntry.create({
+							data: {
+								module: 'SALES',
+								date: createTransactionDto.date,
+								description: createTransactionDto.description || createTransactionDto.to,
+								purposeTransaction: createTransactionDto.to,
+								referenceNumber: createTransactionDto.transactionNumber,
+								numberJurnal: numberJurnalMirror,
+								createdBy: 'System',
+								staffId: decoded.id,
+								transactionId: transaction.id,
+								unitId: createTransactionDto.unitId,
+								is_intercompany: true,
+								intercompanyReference: numberJurnalManual,
+								totalBalance: payAmount,
+
+								details: {
+									create: [
+										{
+											accountCode: bankAccount.accountCode,
+											description: bankAccount.account?.name,
+											unitId: createTransactionDto.unitId,
+											credit: payAmount,
+											debit: 0,
+										},
+										...cashBankTransactionDetails.map((item) => ({
+											accountCode: item.accountCode,
+											description: item.keterangan,
+											unitId: createTransactionDto.unitId,
+											credit: item.credit,
+											debit: item.debit,
+										})),
+									],
+								},
+							},
+						});
+					}
+
+					return transaction;
 				}
-				const sumPayment = createTransactionDto.amount + Number(dataRaw.downPayment || 0);
-				await tx.rawMaterialReceipt.update({
-					where: { id: createTransactionDto.materialId },
-					data: {
-						downPayment: sumPayment,
+
+				// =====================================================
+				// MODE MATERIAL: KAS KELUAR MATERIAL DARI PENERIMAAN
+				// =====================================================
+
+				// Ambil akun bank berdasarkan accountCode.
+				const bankAccount = await tx.bankAccount.findFirst({
+					where: {
+						accountCode: createTransactionDto.BankaccountCode,
+					},
+					include: {
+						account: true,
 					},
 				});
 
+				if (!bankAccount) {
+					throw new NotFoundException('Bank account tidak ditemukan.');
+				}
+
+				// Ambil data penerimaan material.
+				const dataRaw = await tx.rawMaterialReceipt.findUnique({
+					where: {
+						id: createTransactionDto.materialId,
+					},
+					include: {
+						items: {
+							where: {
+								deletedAt: null,
+							},
+						},
+					},
+				});
+
+				if (!dataRaw) {
+					throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
+				}
+
+				// Hitung total tagihan penerimaan material.
+				const totalTagihan = dataRaw.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+
+				// Hitung pembayaran sebelumnya dan pembayaran sekarang.
+				const pembayaranSebelumnya = Number(dataRaw.downPayment || 0);
+				const pembayaranSekarang = Number(createTransactionDto.payAmount || 0);
+
+				const sisaTagihan = totalTagihan - pembayaranSebelumnya;
+
+				// Validasi pembayaran.
+				if (pembayaranSekarang <= 0) {
+					throw new BadRequestException('Jumlah pembayaran harus lebih dari 0.');
+				}
+
+				if (pembayaranSekarang > sisaTagihan) {
+					throw new BadRequestException(`Pembayaran melebihi sisa tagihan. Sisa tagihan: ${sisaTagihan}`);
+				}
+
+				// Hitung total pembayaran setelah transaksi ini.
+				const totalPembayaran = pembayaranSebelumnya + pembayaranSekarang;
+
+				const isLunas = totalPembayaran >= totalTagihan;
+
+				// Ambil detail jurnal yang memiliki COA.
+				const cashBankTransactionDetails = (createTransactionDto.cashBankTransactionDetails || []).filter((item) =>
+					Boolean(item.accountCode),
+				);
+
+				// Buat nomor jurnal setelah validasi pembayaran berhasil.
+				const numberJurnal = await this.createJournal();
+
+				// Kurangi saldo rekening bank setelah validasi berhasil.
+				await tx.bankAccount.update({
+					where: {
+						id: bankAccount.id,
+					},
+					data: {
+						currentBalance: {
+							decrement: pembayaranSekarang,
+						},
+					},
+				});
+
+				// Update pembayaran penerimaan material.
+				await tx.rawMaterialReceipt.update({
+					where: {
+						id: createTransactionDto.materialId,
+					},
+					data: {
+						downPayment: totalPembayaran,
+						isLunas: isLunas ? 'Y' : 'N',
+					},
+				});
+
+				// Simpan transaksi kas keluar material.
 				const transaction = await tx.cashBankTransaction.create({
 					data: {
 						staffId: decoded.id,
 						transactionNumber: createTransactionDto.transactionNumber,
-						amountInIDR: createTransactionDto.payAmount,
-						amountOriginal: createTransactionDto.payAmount,
+						materialId: createTransactionDto.materialId,
+						amountInIDR: pembayaranSekarang,
+						amountOriginal: pembayaranSekarang,
 						currency: 'RP',
 						unitId: createTransactionDto.unitId,
 						date: createTransactionDto.date,
-						grossAmount: createTransactionDto.payAmount,
+						grossAmount: pembayaranSekarang,
 						type: 'CASH_OUT',
 						isMaterial: 'Y',
 						description: createTransactionDto.description,
 						accountCode: createTransactionDto.accountCode,
-						bank_account_id: bankAccount ? bankAccount.id : null,
+						bank_account_id: bankAccount.id,
 						accounIdTax: createTransactionDto.accounIdTax,
 						to: createTransactionDto.to,
 						address: createTransactionDto.address,
+
 						cashBankTransactionDetails: {
 							create: [
-								// {
-								// 	accountCode: bankAccount.accountCode,
-								// 	accountName: bankAccount.account?.name || '',
-								// 	keterangan: bankAccount.account?.name,
-								// 	unitId: bankAccount.unitId,
-								// 	credit: createTransactionDto.payAmount,
-								// 	debit: 0,
-								// },
-								...createTransactionDto.cashBankTransactionDetails.map((item) => ({
+								// Detail transaksi sesuai input frontend.
+								...cashBankTransactionDetails.map((item) => ({
 									accountCode: item.accountCode,
 									accountName: item.accountName,
 									keterangan: item.keterangan,
@@ -2720,6 +3053,7 @@ export class TransactionService {
 								})),
 							],
 						},
+
 						journalEntry: {
 							create: {
 								module: 'FINANCE',
@@ -2731,7 +3065,8 @@ export class TransactionService {
 								createdBy: 'System',
 								staffId: decoded.id,
 								unitId: bankAccount.unitId,
-								totalBalance: createTransactionDto.payAmount,
+								totalBalance: pembayaranSekarang,
+
 								details: {
 									create: [
 										{
@@ -2739,24 +3074,28 @@ export class TransactionService {
 											description: bankAccount.account?.name,
 											unitId: bankAccount.unitId,
 											debit: 0,
-											credit: createTransactionDto.payAmount,
+											credit: pembayaranSekarang,
 										},
-										...createTransactionDto.cashBankTransactionDetails.map((item) => ({
+										...cashBankTransactionDetails.map((item) => ({
 											accountCode: item.accountCode,
 											unitId: bankAccount.unitId,
 											description: item.keterangan,
 											credit: item.credit,
 											debit: item.debit,
 										})),
-									].filter(Boolean),
+									],
 								},
 							},
 						},
 					},
 				});
+
+				// Buat jurnal mirror jika unit rekening bank berbeda
+				// dengan unit transaksi.
 				if (bankAccount.unitId !== createTransactionDto.unitId) {
 					const numberJurnalMirror = await this.createJournal(2);
-					//Mirror jurnal
+
+					// Mirror jurnal.
 					await tx.journalEntry.create({
 						data: {
 							module: 'SALES',
@@ -2771,17 +3110,18 @@ export class TransactionService {
 							unitId: createTransactionDto.unitId,
 							is_intercompany: true,
 							intercompanyReference: numberJurnal,
-							totalBalance: createTransactionDto.amount,
+							totalBalance: pembayaranSekarang,
+
 							details: {
 								create: [
 									{
 										accountCode: bankAccount.accountCode,
 										description: bankAccount.account?.name,
 										unitId: createTransactionDto.unitId,
-										credit: createTransactionDto.payAmount,
+										credit: pembayaranSekarang,
 										debit: 0,
 									},
-									...createTransactionDto.cashBankTransactionDetails.map((item) => ({
+									...cashBankTransactionDetails.map((item) => ({
 										accountCode: item.accountCode,
 										description: item.keterangan,
 										unitId: createTransactionDto.unitId,
@@ -2793,6 +3133,7 @@ export class TransactionService {
 						},
 					});
 				}
+
 				return transaction;
 			},
 			{
@@ -2801,6 +3142,7 @@ export class TransactionService {
 			},
 		);
 	}
+
 	private isSameUnit(userUnitId: string, bankUnitId: string): boolean {
 		return userUnitId === bankUnitId;
 	}
@@ -3490,6 +3832,297 @@ export class TransactionService {
 		} catch (err) {
 			throw err;
 		}
+	}
+
+	async updateCashOutFlowRawMaterial(id: string, dto: CreateCashOutFlowDto, decoded: DecodeTokenType) {
+		return this.prisma.$transaction(
+			async (tx) => {
+				const existing = await tx.cashBankTransaction.findFirst({
+					where: {
+						id,
+						type: 'CASH_OUT',
+						currency: 'RP',
+						isMaterial: 'Y',
+						deletedAt: null,
+					},
+					include: {
+						journalEntry: { include: { details: true } },
+						cashBankTransactionDetails: true,
+					},
+				});
+
+				if (!existing) {
+					throw new NotFoundException('Transaksi Kas Keluar Material tidak ditemukan.');
+				}
+
+				// Mode transaksi wajib mengikuti data awal di database.
+				const isMaterialMode = Boolean(existing.materialId);
+
+				if (isMaterialMode && dto.materialId && dto.materialId !== existing.materialId) {
+					throw new BadRequestException('Transaksi tidak boleh dipindahkan ke penerimaan material lain.');
+				}
+
+				if (!isMaterialMode && dto.materialId) {
+					throw new BadRequestException('Transaksi Manual tidak boleh diubah menjadi Raw Material.');
+				}
+
+				const mainJournal = existing.journalEntry.find((journal) => !journal.is_intercompany);
+				const mirrorJournal = existing.journalEntry.find((journal) => journal.is_intercompany);
+
+				if (!mainJournal) {
+					throw new BadRequestException('Jurnal utama tidak ditemukan.');
+				}
+
+				if (mainJournal.isPosted) {
+					throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+				}
+
+				if (mirrorJournal?.isPosted) {
+					throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+				}
+
+				const payAmount = Number(dto.payAmount || 0);
+
+				if (!Number.isFinite(payAmount) || payAmount <= 0) {
+					throw new BadRequestException('Jumlah pembayaran harus lebih dari 0.');
+				}
+
+				const transactionDate = new Date(String(dto.date));
+
+				if (Number.isNaN(transactionDate.getTime())) {
+					throw new BadRequestException('Tanggal transaksi tidak valid.');
+				}
+
+				if (!dto.bank_account_id) {
+					throw new BadRequestException('Rekening bank wajib dipilih.');
+				}
+
+				const bankAccount = await tx.bankAccount.findUnique({
+					where: { id: dto.bank_account_id },
+					include: { account: true },
+				});
+
+				if (!bankAccount) {
+					throw new NotFoundException('Bank account tidak ditemukan.');
+				}
+
+				const details = (dto.cashBankTransactionDetails || []).filter((item) => Boolean(item.accountCode));
+
+				// Mode Raw Material: hitung ulang pembayaran tanpa transaksi yang sedang diedit.
+				let receiptTotalPayment = 0;
+
+				if (isMaterialMode) {
+					const receipt = await tx.rawMaterialReceipt.findFirst({
+						where: {
+							id: existing.materialId,
+							deletedAt: null,
+						},
+						include: {
+							items: {
+								where: { deletedAt: null },
+							},
+						},
+					});
+
+					if (!receipt) {
+						throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
+					}
+
+					const totalTagihan = receipt.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+
+					const otherPayments = await tx.cashBankTransaction.findMany({
+						where: {
+							id: { not: id },
+							materialId: existing.materialId,
+							type: 'CASH_OUT',
+							currency: 'RP',
+							isMaterial: 'Y',
+							deletedAt: null,
+						},
+						select: {
+							amountInIDR: true,
+						},
+					});
+
+					const previousPayment = otherPayments.reduce((total, transaction) => total + Number(transaction.amountInIDR || 0), 0);
+
+					receiptTotalPayment = previousPayment + payAmount;
+
+					if (receiptTotalPayment > totalTagihan) {
+						throw new BadRequestException(
+							`Pembayaran melebihi sisa tagihan. Sisa tagihan: ${Math.max(totalTagihan - previousPayment, 0)}`,
+						);
+					}
+
+					await tx.rawMaterialReceipt.update({
+						where: { id: existing.materialId },
+						data: {
+							downPayment: receiptTotalPayment,
+							isLunas: receiptTotalPayment >= totalTagihan ? 'Y' : 'N',
+						},
+					});
+				}
+
+				// Reverse saldo rekening lama.
+				if (existing.bank_account_id) {
+					await tx.bankAccount.update({
+						where: { id: existing.bank_account_id },
+						data: {
+							currentBalance: {
+								increment: Number(existing.amountInIDR || 0),
+							},
+						},
+					});
+				}
+
+				// Terapkan pembayaran terbaru ke rekening yang dipilih.
+				await tx.bankAccount.update({
+					where: { id: bankAccount.id },
+					data: {
+						currentBalance: {
+							decrement: payAmount,
+						},
+					},
+				});
+
+				// Hapus saran jurnal lama sebelum membangun jurnal terbaru.
+				await tx.journalAdjustmentSuggestion.deleteMany({
+					where: { transactionId: id },
+				});
+
+				// Hapus detail dan jurnal lama. Status posted sudah diperiksa di atas.
+				for (const journal of existing.journalEntry) {
+					await tx.journalEntryDetail.deleteMany({
+						where: { journalEntryId: journal.id },
+					});
+
+					await tx.journalEntry.delete({
+						where: { id: journal.id },
+					});
+				}
+
+				const numberJurnal = await this.createJournal();
+				const isIntercompany = bankAccount.unitId !== dto.unitId;
+				const numberJurnalMirror = isIntercompany ? await this.createJournal(2) : null;
+
+				const journalDetails = details.map((item) => ({
+					accountCode: item.accountCode,
+					unitId: bankAccount.unitId,
+					description: item.keterangan || item.description,
+					debit: item.debit || 0,
+					credit: item.credit || 0,
+				}));
+
+				const transaction = await tx.cashBankTransaction.update({
+					where: { id },
+					data: {
+						transactionNumber: dto.transactionNumber,
+						amountInIDR: payAmount,
+						amountOriginal: payAmount,
+						grossAmount: payAmount,
+						currency: 'RP',
+						type: 'CASH_OUT',
+						isMaterial: 'Y',
+						materialId: existing.materialId,
+						unitId: dto.unitId,
+						date: transactionDate,
+						description: dto.description,
+						accountCode: dto.accountCode || null,
+						bank_account_id: bankAccount.id,
+						accounIdTax: dto.accounIdTax,
+						taxType: dto.taxType,
+						taxValue: dto.taxValue,
+						to: dto.to,
+						address: dto.address,
+						cashBankTransactionDetails: {
+							deleteMany: {},
+							create: details.map((item) => ({
+								accountCode: item.accountCode,
+								accountName: item.accountName || item.accountCode,
+								keterangan: item.keterangan || item.description,
+								unitId: bankAccount.unitId,
+								debit: item.debit || 0,
+								credit: item.credit || 0,
+							})),
+						},
+					},
+				});
+
+				// Jurnal utama mengikuti pola CREATE.
+				await tx.journalEntry.create({
+					data: {
+						module: 'FINANCE',
+						date: transactionDate,
+						description: dto.description || dto.to,
+						purposeTransaction: dto.to,
+						referenceNumber: dto.transactionNumber,
+						numberJurnal,
+						createdBy: 'System',
+						staffId: decoded.id,
+						unitId: bankAccount.unitId,
+						transactionId: id,
+						totalBalance: payAmount,
+						details: {
+							create: [
+								{
+									accountCode: bankAccount.accountCode,
+									description: bankAccount.account?.name,
+									unitId: bankAccount.unitId,
+									debit: 0,
+									credit: payAmount,
+								},
+								...journalDetails,
+							],
+						},
+					},
+				});
+
+				// Jurnal mirror jika unit rekening bank berbeda dengan unit transaksi.
+				if (isIntercompany && numberJurnalMirror) {
+					await tx.journalEntry.create({
+						data: {
+							module: 'SALES',
+							date: transactionDate,
+							description: dto.description || dto.to,
+							purposeTransaction: dto.to,
+							referenceNumber: dto.transactionNumber,
+							numberJurnal: numberJurnalMirror,
+							createdBy: 'System',
+							staffId: decoded.id,
+							transactionId: id,
+							unitId: dto.unitId,
+							is_intercompany: true,
+							intercompanyReference: numberJurnal,
+							totalBalance: payAmount,
+							details: {
+								create: [
+									{
+										accountCode: bankAccount.accountCode,
+										description: bankAccount.account?.name,
+										unitId: dto.unitId,
+										debit: 0,
+										credit: payAmount,
+									},
+									...details.map((item) => ({
+										accountCode: item.accountCode,
+										description: item.keterangan || item.description,
+										unitId: dto.unitId,
+										debit: item.debit || 0,
+										credit: item.credit || 0,
+									})),
+								],
+							},
+						},
+					});
+				}
+
+				return transaction;
+			},
+			{
+				maxWait: 10000,
+				timeout: 15000,
+			},
+		);
 	}
 }
 

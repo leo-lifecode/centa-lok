@@ -90,8 +90,24 @@ export class TransactionController {
 		return this.transactionService.updateCashOutFlow(id, updateTransactionDto, decoded);
 	}
 
+	@Patch('cash-out-flow-raw-material/:id')
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Update transaction Cash Out Flow Raw Material' })
+	updateCashOutFlowRawMaterial(@Req() req: Request, @Param('id') id: string, @Body() updateTransactionDto: CreateCashOutFlowDto) {
+		const decoded = this.helperGlobal.decodeJwt(req);
+		return this.transactionService.updateCashOutFlowRawMaterial(id, updateTransactionDto, decoded);
+	}
+
+	@Delete('cash-out-flow-raw-material/:id')
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Remove transaction Cash Out Flow Raw Material' })
+	removeCashOutFlowRawMaterial(@Param('id') id: string) {
+		return this.transactionService.removeCashOutFlowRawMaterial(id);
+	}
+
 	@Delete(':id')
-	@ApiBearerAuth() //+
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Remove transaction' })
 	remove(@Param('id') id: string) {
 		return this.transactionService.remove(id);
 	}
