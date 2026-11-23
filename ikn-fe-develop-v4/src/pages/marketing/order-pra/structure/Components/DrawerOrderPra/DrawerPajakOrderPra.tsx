@@ -33,8 +33,7 @@ export default function DrawerPajakOrderPra({
 
     setDataSourcePajak((prev: any[]) => [...prev, newTax]);
 
-    formItems.resetFields();
-    setOpen(false);
+    onClose();
   };
 
   const handleRowDoubleClick = (record: any) => {
