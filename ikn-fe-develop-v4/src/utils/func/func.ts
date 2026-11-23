@@ -22,7 +22,7 @@ export const openUrl = (url: string) => {
 const friendlyTechnicalMessage = (msg: unknown, fallback: string): string => {
   const raw = Array.isArray(msg) ? msg.join('; ') : String(msg ?? '');
   if (/^Network Error$/i.test(raw)) return 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.';
-  if (/timeout/i.test(raw)) return 'Server terlalu lama merespons. Silakan coba lagi.';
+  if (/timeout|ECONNABORTED|waktu tunggu habis|Transaction already closed/i.test(raw)) return 'Koneksi lambat atau terputus (waktu tunggu habis). Periksa koneksi jaringan Anda lalu coba lagi.';
   if (/Request failed with status code 5\d\d/i.test(raw)) return 'Terjadi kesalahan pada server. Silakan coba lagi.';
   if (/Request failed with status code 404/i.test(raw)) return 'Data yang dicari tidak ditemukan.';
   if (/Request failed with status code 40[03]/i.test(raw)) return `${fallback}. Mohon periksa kembali isian Anda.`;
