@@ -198,10 +198,11 @@ export class UpdateOrderPoPraDto {
 	@Validators.IsOptional()
 	additionalService?: AdditionalServiceDto[];
 
-	@Validators.IsNumber()
-	@Validators.IsNotEmpty({ message: 'totalAmount tidak boleh kosong' })
-	@ApiProperty({ description: 'totalAmount', type: Number, example: 1000 })
-	totalAmount: number;
+	// Opsional: pesanan RN / RN Ekspor tidak mengirim totalAmount (dihitung server / tetap memakai nilai lama)
+	@Validators.IsOptional()
+	@Validators.IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'totalAmount harus berupa angka yang valid' })
+	@ApiProperty({ description: 'totalAmount', type: Number, example: 1000, required: false })
+	totalAmount?: number;
 
 	@Validators.IsArray({ message: 'taxes harus berupa array' })
 	@Validators.ValidateNested({ each: true })
