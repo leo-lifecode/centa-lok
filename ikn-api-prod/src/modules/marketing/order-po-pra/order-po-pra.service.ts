@@ -397,7 +397,9 @@ export class OrderPoPraService {
 						fileUrlEkspor: updateOrderPoPraDto.fileUrlEkspor,
 						fileUrlProduksi: updateOrderPoPraDto.fileUrlProduksi,
 						subtotalAmount: +updateOrderPoPraDto.subtotalAmount,
-						totalAmount: rnTaxData?.totalAmount ?? Number(updateOrderPoPraDto.totalAmount),
+						totalAmount:
+							rnTaxData?.totalAmount ??
+							(updateOrderPoPraDto.totalAmount != null ? Number(updateOrderPoPraDto.totalAmount) : currentOrder.totalAmount),
 						...(rnTaxData ? { taxAmount: rnTaxData.taxAmount } : {}),
 						customerName: updateOrderPoPraDto.customerName,
 						customerId: updateOrderPoPraDto.customerId,
