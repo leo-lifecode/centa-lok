@@ -275,7 +275,7 @@ export default function OrderRNUpdate() {
         setLoading(true);
         const data = await OrderPraAxios.fetchDataOrderPraById(id);
         setDataPO(data);
-        setDataSourceItems(data?.items || []);
+        setDataSourceItems(globalHelpers.isiNilaiSatuan(data?.items || []));
         setDataSourcePajak(data?.PurchaseOrderTax || []);
         form.setFieldsValue({
           orderNumber: data.orderNumber,
@@ -392,7 +392,7 @@ export default function OrderRNUpdate() {
       kategoriProduct: findOne?.kategoriProduct,
       satuanProduct: findOne?.satuanProduct,
       unitProduct: findOne?.unitProduct,
-      nilaiSatuan: findOne?.beratproduct,
+      nilaiSatuan: findOne?.nilaiSatuan,
       namabarangProductInvoice: findOne?.namabarangProductInvoice,
       quantity: findOne?.quantity,
       priceProduct: findOne?.priceProduct,

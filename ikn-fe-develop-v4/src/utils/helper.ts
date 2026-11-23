@@ -153,6 +153,16 @@ export const preciseMultiply = (a: number, b: number): number => {
   return parseFloat((Number(a) * Number(b)).toFixed(12));
 };
 
+// Tabel item pesanan tidak menyimpan nilaiSatuan; nilainya diturunkan dari beratproduct / quantity.
+export function isiNilaiSatuan(items: any[] = []): any[] {
+  return items.map((item: any) => {
+    const qty = Number(item?.quantity) || 0;
+    const berat = Number(item?.beratproduct) || 0;
+    const nilaiSatuan = item?.nilaiSatuan ?? (qty > 0 ? berat / qty : berat);
+    return { ...item, nilaiSatuan };
+  });
+}
+
 export function hitungTotalHarga(products: any): number {
   return products.reduce((total: number, product: any) => {
     return total + product.quantity * product.priceProduct;
