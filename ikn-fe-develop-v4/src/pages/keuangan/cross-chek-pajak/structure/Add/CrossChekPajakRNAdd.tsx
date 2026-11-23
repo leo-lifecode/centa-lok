@@ -98,8 +98,9 @@ export default function CrossChekPajakRNAdd() {
         }));
 
       const payload = {
-        totalAmounTax: values.totalAmounTax,
-        totalAmount: values.totalAmount,
+        // Pastikan angka (nilai Decimal dari backend bisa berupa string).
+        totalAmounTax: Number(values.totalAmounTax),
+        totalAmount: Number(values.totalAmount),
         purchaseOrderId: values.purchaseOrderId,
         orderNumber: values.orderNumber,
         taxes: dataSourcePajakNew,
