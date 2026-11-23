@@ -87,6 +87,8 @@ const GENERIC: Record<string, string> = {
 	'An unexpected server error occurred': 'Terjadi kesalahan pada server. Silakan coba lagi, atau hubungi admin jika terus berulang.',
 	'An unexpected database error occurred': 'Terjadi kesalahan pada database. Silakan coba lagi, atau hubungi admin jika terus berulang.',
 	'Bad Request Exception': 'Data yang dikirim belum lengkap atau belum benar. Mohon periksa kembali isian Anda.',
+	'Transaction error: API issue with transaction.':
+		'Proses penyimpanan terlalu lama sehingga dibatalkan. Data belum tersimpan, silakan coba lagi.',
 	Unauthorized: 'Sesi Anda sudah berakhir. Silakan login kembali.',
 	Forbidden: 'Anda tidak memiliki akses untuk melakukan tindakan ini.',
 	'Forbidden resource': 'Anda tidak memiliki akses untuk melakukan tindakan ini.',
