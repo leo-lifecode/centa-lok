@@ -266,8 +266,8 @@ export default function CrossChekPajakRNAdd() {
           subtotalAmount: data.subtotalAmount,
           // spbId: data.id,
           purchaseOrderId: data.id,
-          totalAmount: data.totalAmount + totalPPh22 + totalPPh23,
-          totalAmounTax: data.totalAmount + totalPPh22 + totalPPh23,
+          totalAmount: Number(data.totalAmount) + totalPPh22 + totalPPh23,
+          totalAmounTax: Number(data.totalAmount) + totalPPh22 + totalPPh23,
         });
       }
       setLoading(false);
