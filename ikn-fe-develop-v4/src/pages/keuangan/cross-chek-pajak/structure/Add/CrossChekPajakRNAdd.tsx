@@ -119,7 +119,14 @@ export default function CrossChekPajakRNAdd() {
       form.resetFields();
     } catch (e) {
       setLoading(false);
-      showNotification('error', 'Gagal', 'Gagal Menambahkan Data');
+      const backendMessage = (e as any)?.customMessage?.response?.data?.message;
+      showNotification(
+        'error',
+        'Gagal',
+        Array.isArray(backendMessage)
+          ? backendMessage.join(', ')
+          : backendMessage || 'Gagal Menambahkan Data',
+      );
     }
   };
 
@@ -235,7 +242,7 @@ export default function CrossChekPajakRNAdd() {
         setLoading(true);
         const data = await OrderRNAxios.fetchDataOrderPraById(id);
         setDataSourceItems(data?.items || []);
-        setDataSourcePajak(data?.spbTax || []);
+        setDataSourcePajak(data?.PurchaseOrderTax || []);
 
         let totalPPh22 = 0;
         let totalPPh23 = 0;
@@ -412,7 +419,6 @@ export default function CrossChekPajakRNAdd() {
             <Form.Item
               label="Keterangan"
               name="description"
-              rules={[{ required: true, message: 'Masuka Keterangan!' }]}
             >
               <Input
                 disabled

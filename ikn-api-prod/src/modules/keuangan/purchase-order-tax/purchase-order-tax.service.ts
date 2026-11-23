@@ -1,4 +1,4 @@
-import { Injectable, Scope } from '@nestjs/common';
+import { ConflictException, Injectable, Scope } from '@nestjs/common';
 import { BulkCreatePurchaseOrderTaxRNDto } from './dto/create-purchase-order-tax-rn.dto';
 import { BulkCreatePurchaseOrderTaxDto } from './dto/create-purchase-order-tax.dto';
 
@@ -321,8 +321,24 @@ export class PurchaseOrderTaxService {
 				},
 			});
 
+			// Buang pajak ganda dalam payload, lalu tolak jika pesanan sudah memiliki pajak tersebut.
+			const taxes = createPurchaseOrderTaxDto.taxes.filter(
+				(tax, index, list) => list.findIndex((item) => item.taxId === tax.taxId) === index,
+			);
+			const existingTaxes = await tx.purchaseOrderTax.findMany({
+				where: {
+					purchaseOrderId: createPurchaseOrderTaxDto.purchaseOrderId,
+					taxId: { in: taxes.map((tax) => tax.taxId) },
+				},
+			});
+			if (existingTaxes.length > 0) {
+				throw new ConflictException(
+					`Pajak ${existingTaxes.map((tax) => tax.taxType).join(', ')} sudah ada pada pesanan ini.`,
+				);
+			}
+
 			return tx.purchaseOrderTax.createMany({
-				data: createPurchaseOrderTaxDto.taxes.map((tax) => ({
+				data: taxes.map((tax) => ({
 					purchaseOrderId: tax.purchaseOrderId,
 					taxId: tax.taxId,
 					taxType: tax.taxType,

@@ -11,6 +11,7 @@ import {
   Input,
   InputNumber,
   FormInstance,
+  message,
 } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import ModalProdukPra from '../ModalCrossChekPajak/ModalCrossChekPajak';
@@ -33,6 +34,11 @@ export default function DrawerCrossChekPajak({
   const [open, setOpen] = useState(false);
   const [formItems] = Form.useForm();
   const onFinishItems = async (values: any) => {
+    // Satu pesanan tidak boleh memiliki pajak yang sama dua kali (unik purchaseOrderId + taxId).
+    if (dataSourcePajak.some((item: any) => item.taxId === values.taxId)) {
+      message.warning('Pajak ini sudah ada pada pesanan.');
+      return;
+    }
     values.add = true;
     const pajak = [...dataSourcePajak, values];
     const result = calculateTax(openDrawer.subtotalAmount, pajak);
