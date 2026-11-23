@@ -18,13 +18,28 @@ export const openUrl = (url: string) => {
   window.open(url);
 };
 
+// Pesan teknis dari browser/axios/JS diganti kalimat yang mudah dipahami.
+const friendlyTechnicalMessage = (msg: unknown, fallback: string): string => {
+  const raw = Array.isArray(msg) ? msg.join('; ') : String(msg ?? '');
+  if (/^Network Error$/i.test(raw)) return 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.';
+  if (/timeout/i.test(raw)) return 'Server terlalu lama merespons. Silakan coba lagi.';
+  if (/Request failed with status code 5\d\d/i.test(raw)) return 'Terjadi kesalahan pada server. Silakan coba lagi.';
+  if (/Request failed with status code 404/i.test(raw)) return 'Data yang dicari tidak ditemukan.';
+  if (/Request failed with status code 40[03]/i.test(raw)) return `${fallback}. Mohon periksa kembali isian Anda.`;
+  if (/Failed to upload file/i.test(raw)) return 'File gagal diunggah. Pastikan ukuran dan format file sesuai, lalu coba lagi.';
+  if (/Cannot read properties|undefined|is not a function|is not defined|Unexpected token/i.test(raw))
+    return `${fallback}. Terjadi kendala pada halaman, silakan muat ulang atau hubungi admin.`;
+  return raw || fallback;
+};
+
 export const handleMessageError = (e: any, text: string = 'Gagal Menambahkan Data') => {
-  const message =
+  const rawMessage =
     e?.customMessage?.response?.data?.message ||
     e?.response?.data?.message ||
     e?.customMessage ||
     e?.message ||
     text;
+  const message = friendlyTechnicalMessage(rawMessage, text);
 
   void captureError(e, {
     handled: true,

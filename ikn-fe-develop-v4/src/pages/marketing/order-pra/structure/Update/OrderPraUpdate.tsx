@@ -224,11 +224,7 @@ export default function OrderPraUpdate() {
         const data = await OrderPraAxios.fetchDataOrderPraById(id);
         setDataPO(data);
 
-        const dataItems =
-          data?.items.map((item: any) => ({
-            ...item,
-            nilaiSatuan: item.beratproduct || 0,
-          })) || [];
+        const dataItems = globalHelpers.isiNilaiSatuan(data?.items || []);
 
         setDataSourceItems(dataItems || []);
 
@@ -409,7 +405,7 @@ export default function OrderPraUpdate() {
       kategoriProduct: findOne?.kategoriProduct,
       satuanProduct: findOne?.satuanProduct,
       unitProduct: findOne?.unitProduct,
-      nilaiSatuan: findOne?.beratproduct,
+      nilaiSatuan: findOne?.nilaiSatuan,
       namabarangProductInvoice: findOne?.namabarangProductInvoice,
       quantity: findOne?.quantity,
       priceProduct: findOne?.priceProduct,

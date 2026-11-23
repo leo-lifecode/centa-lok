@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { ErrorResponse } from '@shared/types/responses';
 import { PrismaErrorCode } from '@shared/utils/prisma.errorCode';
 import { AxiosError } from 'axios';
+import { toFriendlyMessage } from '@shared/utils/friendly-message';
 
 export function UseAllExceptionsFilter(httpAdapterHost: AbstractHttpAdapter) {
 	@Catch()
@@ -58,7 +59,8 @@ export function UseAllExceptionsFilter(httpAdapterHost: AbstractHttpAdapter) {
 					responseBody.status = HttpStatus.INTERNAL_SERVER_ERROR;
 				}
 			}
-			this.logger.error(`Message: ${responseBody.message}, Status: ${responseBody.status}`);
+			this.logger.error(`Message: ${JSON.stringify(responseBody.message)}, Status: ${responseBody.status}`);
+			responseBody.message = toFriendlyMessage(responseBody.message);
 			httpAdapter.reply(ctx.getResponse(), responseBody, responseBody.status);
 		}
 	}
