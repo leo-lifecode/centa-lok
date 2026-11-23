@@ -1,4 +1,10 @@
 import type { NotificationInstance } from 'antd/es/notification/interface';
+import {
+  CONNECTION_ERROR_MESSAGE,
+  CONNECTION_ERROR_TITLE,
+  hasRecentConnectionError,
+} from '@/utils/connectionError';
+
 let notificationApi: NotificationInstance | null = null;
 export function setNotificationApi(api: NotificationInstance) {
   notificationApi = api;
@@ -15,9 +21,12 @@ export function showNotification(
     return;
   }
 
+  // Jika error tadi disebabkan koneksi/timeout, tampilkan penyebab sebenarnya.
+  const isConn = type === 'error' && hasRecentConnectionError();
+
   notificationApi[type]({
-    message: title,
-    description,
+    message: isConn ? CONNECTION_ERROR_TITLE : title,
+    description: isConn ? CONNECTION_ERROR_MESSAGE : description,
     placement,
   });
 }
