@@ -145,7 +145,7 @@ export default function ModalDeliveryPoRN({
     status: null,
     selectionStatus: 'NOT_SELECTED',
     typePo: "RN",
-    cekPajak: "YES"
+    // Pajak sudah diinput di Pemesanan RN (sama seperti RA), jadi tidak perlu lewat Cek Pajak dulu.
   });
 
   useEffect(() => {
