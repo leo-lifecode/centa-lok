@@ -378,7 +378,7 @@ function JournalTable({
             />
 
             <Popconfirm
-              title="Apakah Anda yakin ingin menghapus data ini?"
+              title="Apakah Anda yakin ingin menghapus data ini? Jika jurnal berasal dari Uang Masuk Bank (Rp), transaksi Uang Masuk terkait ikut dihapus."
               okText="Ya"
               cancelText="Batal"
               onConfirm={() => handleDelete(record.id)} // Fungsi delete

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { HelperGlobal } from '@src/common/utils/helper/helper';
 import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
+import { TransactionService } from '../transaction/transaction.service';
 import { JurnalEntryController } from './jurnal-entry.controller';
 import { JurnalEntryService } from './jurnal-entry.service';
 
