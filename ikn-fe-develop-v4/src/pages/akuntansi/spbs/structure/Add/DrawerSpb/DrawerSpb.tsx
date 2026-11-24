@@ -152,7 +152,10 @@ export default function DrawerSpb({
     onChange: (_keys, selectedRows) => {
       setSelected((prev: any[]) =>
         (selectedRows as any[]).map(
-          (row: any) => prev.find((item: any) => getRowKey(item) === getRowKey(row)) ?? row
+          (row: any) =>
+            prev.find((item: any) => getRowKey(item) === getRowKey(row)) ??
+            // RA: isi Qty Kirim otomatis dengan sisa qty agar tombol OK langsung bisa dipakai
+            (typeSalesSPb === 'RA' ? { ...row, qtyKirim: getSisaQty(row) } : row)
         )
       );
     },
