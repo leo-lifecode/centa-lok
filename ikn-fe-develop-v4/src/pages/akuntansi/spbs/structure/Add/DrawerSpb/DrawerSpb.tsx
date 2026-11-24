@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Drawer, InputNumber, Space, Table } from 'antd';
+import { Button, Drawer, InputNumber, Space, Table, message } from 'antd';
 import * as globalHelpers from '@/utils/helper';
 import type { FormInstance, TableColumnsType, TableProps } from 'antd';
 
@@ -142,12 +142,19 @@ export default function DrawerSpb({
     },
   ];
 
+  const getRowKey = (record: any) => (typeSalesSPb === 'RA' ? record.id : record.productId);
+
+  // Pilihan dikontrol agar centang selalu sama dengan data `selected`
+  // dan Qty Kirim yang sudah diisi tidak hilang saat memilih baris lain.
   const rowSelection: TableProps<DataType>['rowSelection'] = {
-    onSelect: (_record, _selected, selectedRows) => {
-      setSelected(selectedRows as any);
-    },
-    onSelectAll: (_selected, selectedRows) => {
-      setSelected(selectedRows as any);
+    selectedRowKeys: selected.map((item: any) => getRowKey(item)),
+    preserveSelectedRowKeys: true,
+    onChange: (_keys, selectedRows) => {
+      setSelected((prev: any[]) =>
+        (selectedRows as any[]).map(
+          (row: any) => prev.find((item: any) => getRowKey(item) === getRowKey(row)) ?? row
+        )
+      );
     },
   };
 
@@ -156,6 +163,11 @@ export default function DrawerSpb({
       ...prev,
       open: false,
     }));
+  };
+
+  const onCancel = () => {
+    setSelected([]);
+    onClose();
   };
 
   const dataSource =
@@ -174,15 +186,21 @@ export default function DrawerSpb({
       open={openDrawer.open}
       extra={
         <Space>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onCancel}>Cancel</Button>
 
           <Button
             type="primary"
             onClick={() => {
+              if (selected.length === 0) {
+                message.warning('Pilih minimal satu barang.');
+                return;
+              }
+
               if (
                 typeSalesSPb === 'RA' &&
                 selected.some((item: any) => !item.qtyKirim || item.qtyKirim <= 0)
               ) {
+                message.warning('Isi Qty Kirim (lebih dari 0) untuk setiap barang yang dipilih.');
                 return;
               }
 
@@ -197,7 +215,7 @@ export default function DrawerSpb({
       }
     >
       <Table<DataType>
-        rowKey={(record: any) => (typeSalesSPb === 'RA' ? record.id : record.productId)}
+        rowKey={getRowKey}
         scroll={{ x: 'max-content' }}
         rowSelection={{
           type: 'checkbox',
