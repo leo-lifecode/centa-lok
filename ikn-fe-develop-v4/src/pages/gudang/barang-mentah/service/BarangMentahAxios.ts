@@ -58,6 +58,7 @@ interface ParamsType {
   periode_month?: string | null;
   status?: string | null;
   value_rkap: string | null;
+  [key: string]: any;
 }
 
 export const fetchDataBarangMentah = async (params: ParamsType) => {

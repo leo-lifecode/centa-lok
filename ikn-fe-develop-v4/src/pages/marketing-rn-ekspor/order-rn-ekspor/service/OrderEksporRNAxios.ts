@@ -1,7 +1,7 @@
-import * as OrderRNInterfaces from '@/pages/marketing-rn/order-rn/interface/OrderRNInterfaces';
 import { filterAndRemoveKeys, ThrowError } from '@/utils/helper';
 import dayjs from 'dayjs';
 import api from '@/api/axiosInstance';
+import * as OrderEksporRNInterfaces from '@pages/marketing-rn-ekspor/order-rn-ekspor/interface/OrderEksporRNInterfaces';
 
 export const fetchGenCodeOrderPrnEkspor = async () => {
   try {
@@ -15,7 +15,7 @@ export const fetchGenCodeOrderPrnEkspor = async () => {
   }
 };
 
-export const posOrderRN = async (data: OrderRNInterfaces.PayloadOrderRNType) => {
+export const posOrderRN = async (data: OrderEksporRNInterfaces.PayloadOrderRNType) => {
   try {
     const result = await api.post(`/api/v1/marketing/order-po-pra`, data);
     if (![200, 201].includes(result.status)) {
@@ -27,7 +27,10 @@ export const posOrderRN = async (data: OrderRNInterfaces.PayloadOrderRNType) => 
   }
 };
 
-export const updateOrderPra = async (id: string, data: OrderRNInterfaces.PayloadOrderRNType) => {
+export const updateOrderPra = async (
+  id: string,
+  data: OrderEksporRNInterfaces.PayloadOrderRNType
+) => {
   try {
     const result = await api.patch(`/api/v1/marketing/order-po-pra/${id}`, data);
     if (![200, 201].includes(result.status)) {

@@ -10,6 +10,8 @@ export interface TransactionType {
   description?: string;
   date?: Date | string;
   kategori?: null;
+  receivedFrom?: string | null;
+  purpose?: string | null;
   accountCode?: string;
   invoiceId?: string | null;
   bank_account_id?: string | null;

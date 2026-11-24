@@ -13,7 +13,7 @@ import { MagnifyingGlass } from '@phosphor-icons/react';
 import type { FilterDropdownProps } from 'antd/es/table/interface';
 import Highlighter from 'react-highlight-words';
 import { useNavigate } from 'react-router';
-import * as TransactionAxios from '@pages/keuangan/transaction/service/TransactionAxios';
+import * as TransactionOutAxios from '@pages/keuangan/transactionOutRawMaterial/service/TransactionOutAxios';
 
 import * as globalHooks from '@/hooks';
 import dayjs from 'dayjs';
@@ -87,7 +87,7 @@ export default function TransactionOutRawMaterialPage() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await TransactionAxios.fetchDataTransaction(dataTable as any);
+        const res = await TransactionOutAxios.fetchDataTransaction(dataTable as any);
 
         const transactions = res?.data.data.data || [];
 
@@ -112,7 +112,7 @@ export default function TransactionOutRawMaterialPage() {
 
   const dataSource: DataType[] = useMemo(() => dataTable.data, [dataTable.data]);
 
-  globalHooks.useFetchOptions(unit, setUnit, TransactionAxios.fetchDataUnit, [unit.nama]);
+  globalHooks.useFetchOptions(unit, setUnit, TransactionOutAxios.fetchDataUnit, [unit.nama]);
 
   useEffect(() => {
     const newDdata = dataTable.data.filter((item: any) => item.id != idDelete);
@@ -229,26 +229,27 @@ export default function TransactionOutRawMaterialPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await TransactionAxios.delTransaction(id);
+      await TransactionOutAxios.delCashOutFlowRawMaterial(id);
+
       setIdDelete(id);
-      showNotification('success', 'Berhasil', 'Berhapus Hapus Data');
+      showNotification('success', 'Berhasil', 'Berhasil Hapus Data');
     } catch (e: any) {
       if (axios.isAxiosError(e?.customMessage)) {
         return showModal({
           type: 'danger',
           title: 'Terjadi Kesalahan',
-          description: e?.customMessage?.response?.data?.message || 'Gagal Edit Data',
+          description: e?.customMessage?.response?.data?.message || 'Gagal Hapus Data',
           confirmText: 'Ya, Ubah',
-          // onConfirm: () => console.log('updated'),
         });
       }
+
       showNotification('error', 'Gagal', 'Gagal Hapus Data');
     }
   };
 
   const handleToggleAction = async (recordId: string, checked: boolean) => {
     try {
-      await TransactionAxios.updateTransactionActionAccess(recordId, checked);
+      await TransactionOutAxios.updateTransactionActionAccess(recordId, checked);
 
       setTable((prev: any) => ({
         ...prev,

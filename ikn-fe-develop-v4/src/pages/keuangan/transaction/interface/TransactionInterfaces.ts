@@ -10,6 +10,8 @@ export interface TransactionType {
   grossAmount?: number;
   type?: string;
   description?: string;
+  receivedFrom?: string | null;
+  purpose?: string | null;
   date?: Dayjs | string;
   kategori?: null;
   accountCode?: string;

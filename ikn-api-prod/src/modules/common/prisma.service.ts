@@ -4,20 +4,18 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 	constructor() {
-		// Default Prisma: maxWait 2s & timeout 5s -> terlalu singkat untuk DB remote (Supabase) sehingga P2028.
-		super({
-			transactionOptions: {
-				maxWait: Number(process.env.PRISMA_TX_MAX_WAIT_MS) || 10000,
-				timeout: Number(process.env.PRISMA_TX_TIMEOUT_MS) || 30000,
-			},
-		});
+		super();
 
 		// Middleware untuk menyaring data yang belum dihapus (soft delete)
 		this.$use(async (params, next) => {
 			// Initialize params.args if it's undefined
 			params.args = params.args || {};
 
-			if ((params.model && params.action === 'findMany') || params.action === 'findFirst' || params.action === 'findUnique') {
+			if (
+				(params.model && params.action === 'findMany') ||
+				params.action === 'findFirst' ||
+				params.action === 'findUnique'
+			) {
 				// Ensure params.args.where is initialized as an object
 				params.args.where = params.args.where || {};
 

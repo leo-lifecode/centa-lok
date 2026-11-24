@@ -602,15 +602,15 @@ export default function TransactionOutUpdate() {
               </Form.Item>
 
               <Form.Item
-                label="Tujuan Transaksi"
+                label="Penerima"
                 style={{ flex: 1, width: '100%' }}
                 name="to"
-                rules={[{ required: true, message: 'Masukan Tujuan Transaksi!' }]}
+                rules={[{ required: true, message: 'Masukan Penerima!' }]}
               >
                 <Input
                   style={{ width: '100%' }}
                   prefix={<TagChevron size={16} />}
-                  placeholder="Tujuan Transaksi"
+                  placeholder="Penerima"
                 />
               </Form.Item>
 

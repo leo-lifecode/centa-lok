@@ -100,6 +100,8 @@ export default function TransactionDollarUpdate() {
           amount: values?.jumlahBayar,
           amountOriginal: values.amountOriginal,
           description: values?.description || '-',
+          receivedFrom: values?.receivedFrom || null,
+          purpose: values?.purpose || null,
           invoiceId: values?.invoiceId,
           bank_account_id: values?.bankAccountId,
           date: handleDate(values?.inputDate),
@@ -256,6 +258,8 @@ export default function TransactionDollarUpdate() {
           jumlahBayar: data?.amountInIDR,
           amountOriginal: data.amountOriginal || 0,
           description: data?.description || '-',
+          receivedFrom: data?.receivedFrom || '',
+          purpose: data?.purpose || '',
           bank_account_id: data?.bankAccountId,
           date: globalHelpers.dateFormat(data?.inputDate),
           administrasiAmount: data?.biaya,
@@ -763,6 +767,14 @@ export default function TransactionDollarUpdate() {
                   prefix={<DollarCircleFilled size={16} />}
                   placeholder="Jumlah"
                 />
+              </Form.Item>
+
+              <Form.Item label="Penerima" name="to" style={{ flex: 1, width: '100%' }}>
+                <Input placeholder="Masukan Nama Penerima" />
+              </Form.Item>
+
+              <Form.Item label="Alamat Penerima" name="address" style={{ flex: 1, width: '100%' }}>
+                <TextArea rows={2} placeholder="Masukan Alamat Penerima" />
               </Form.Item>
 
               <Form.Item label="Catatan" style={{ flex: 1, width: '100%' }} name="description">

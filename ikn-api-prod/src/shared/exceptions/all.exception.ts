@@ -2,9 +2,9 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import { AbstractHttpAdapter } from '@nestjs/core';
 import { Prisma } from '@prisma/client';
 import { ErrorResponse } from '@shared/types/responses';
+import { toFriendlyMessage } from '@shared/utils/friendly-message';
 import { PrismaErrorCode } from '@shared/utils/prisma.errorCode';
 import { AxiosError } from 'axios';
-import { toFriendlyMessage } from '@shared/utils/friendly-message';
 
 export function UseAllExceptionsFilter(httpAdapterHost: AbstractHttpAdapter) {
 	@Catch()

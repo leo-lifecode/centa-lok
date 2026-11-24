@@ -23,6 +23,7 @@ export function showNotification(
   }
 
   const isConn = type === 'error' && hasRecentConnectionError();
+
   notificationApi[type]({
     message: isConn ? CONNECTION_ERROR_TITLE : title,
     description: isConn ? CONNECTION_ERROR_MESSAGE : description,

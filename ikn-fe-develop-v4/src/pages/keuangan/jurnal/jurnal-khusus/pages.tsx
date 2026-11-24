@@ -22,7 +22,7 @@ const items: TabsProps['items'] = [
 ];
 
 const JurnalKhusuPage: React.FC = () => (
-  <Tabs defaultActiveKey="1" items={items} onChange={onChange} destroyInactiveTabPane />
+  <Tabs defaultActiveKey="1" items={items} onChange={onChange} />
 );
 
 export default JurnalKhusuPage;

@@ -193,7 +193,11 @@ export default function DrawerSpb({
             type="primary"
             onClick={() => {
               if (selected.length === 0) {
-                showNotification('warning', 'Belum ada barang dipilih', 'Centang minimal satu barang terlebih dahulu.');
+                showNotification(
+                  'warning',
+                  'Belum ada barang dipilih',
+                  'Centang minimal satu barang terlebih dahulu.'
+                );
                 return;
               }
 

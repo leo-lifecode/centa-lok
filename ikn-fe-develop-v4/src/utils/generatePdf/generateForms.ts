@@ -1192,6 +1192,12 @@ export function generateBuktiMasukPDF(
   const doc = new jsPDF();
   const typedDoc = doc as jsPDF & { lastAutoTable: { finalY: number } };
 
+  // Identifikasi jenis akun dari BankAccount
+  const bankName = data?.bank_account?.bankName?.trim().toUpperCase();
+
+  const isKas = bankName === 'KAS';
+  const isBank = Boolean(bankName) && bankName !== 'KAS';
+
   const marginLeft = 10;
   const marginTop = 10;
   let y = marginTop;
@@ -1222,12 +1228,23 @@ export function generateBuktiMasukPDF(
   typedDoc.rect(marginLeft + boxWidth + 20, y + 15, 5, 5); // KAS
   typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
 
-  // Buat checkbox
-  typedDoc.rect(marginLeft + boxWidth + 37, y + 15, 5, 5);
-  // Label teks
-  typedDoc.setFont('helvetica', 'bold');
-  typedDoc.setFontSize(10);
-  typedDoc.text('V', marginLeft + boxWidth + 38, y + 19);
+  // ================= CHECKBOX KAS =================
+  const kasCheckboxX = marginLeft + boxWidth + 20;
+  typedDoc.rect(kasCheckboxX, y + 15, 5, 5);
+  if (isKas) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', kasCheckboxX + 1, y + 19);
+  }
+  typedDoc.setFont('helvetica', 'normal');
+  typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
+
+  // ================= CHECKBOX BANK =================
+  const bankCheckboxX = marginLeft + boxWidth + 37;
+  typedDoc.rect(bankCheckboxX, y + 15, 5, 5);
+  if (isBank) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', bankCheckboxX + 1, y + 19);
+  }
   typedDoc.setFont('helvetica', 'normal');
   typedDoc.text('BANK', marginLeft + boxWidth + 45, y + 18);
 
@@ -1258,7 +1275,7 @@ export function generateBuktiMasukPDF(
   typedDoc.setFont('helvetica', 'bold');
   typedDoc.text('Diterima dari', labelX, y);
   typedDoc.setFont('helvetica', 'normal');
-  typedDoc.text(`: ${data?.invoiceEkspor?.spb?.purchaseOrder?.customerName || '-'}`, valueX, y);
+  typedDoc.text(`: ${data?.receivedFrom || '-'}`, valueX, y);
   typedDoc.text('.'.repeat(160), valueX, y + 2); // garis bawah titik-titik
 
   y += 7;
@@ -1276,7 +1293,7 @@ export function generateBuktiMasukPDF(
   typedDoc.setFont('helvetica', 'bold');
   typedDoc.text('Untuk', labelX, y);
   typedDoc.setFont('helvetica', 'normal');
-  typedDoc.text(': -', valueX, y);
+  typedDoc.text(`: ${data?.purpose || '-'}`, valueX, y);
   typedDoc.text('.'.repeat(160), valueX, y + 2); // garis bawah titik-titik
 
   y += 5;
@@ -1427,6 +1444,11 @@ export function generateBuktiMasukDollarPDF(
 ) {
   const doc = new jsPDF();
   const typedDoc = doc as jsPDF & { lastAutoTable: { finalY: number } };
+  const bankName = data?.bank_account?.bankName?.trim().toUpperCase();
+
+  const isKas = bankName === 'KAS';
+  const isBank = Boolean(bankName) && bankName !== 'KAS';
+
   const sumClean =
     Number(other.find((item) => item.accountCode === data.bank_account?.accountCode)?.debit || 0) *
     data.exchangeRate;
@@ -1461,12 +1483,23 @@ export function generateBuktiMasukDollarPDF(
   typedDoc.rect(marginLeft + boxWidth + 20, y + 15, 5, 5); // KAS
   typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
 
-  // Buat checkbox
-  typedDoc.rect(marginLeft + boxWidth + 37, y + 15, 5, 5);
-  // Label teks
-  typedDoc.setFont('helvetica', 'bold');
-  typedDoc.setFontSize(10);
-  typedDoc.text('V', marginLeft + boxWidth + 38, y + 19);
+  // Checkbox KAS
+  const kasCheckboxX = marginLeft + boxWidth + 20;
+  typedDoc.rect(kasCheckboxX, y + 15, 5, 5);
+  if (isKas) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', kasCheckboxX + 1, y + 19);
+  }
+  typedDoc.setFont('helvetica', 'normal');
+  typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
+
+  // Checkbox BANK
+  const bankCheckboxX = marginLeft + boxWidth + 37;
+  typedDoc.rect(bankCheckboxX, y + 15, 5, 5);
+  if (isBank) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', bankCheckboxX + 1, y + 19);
+  }
   typedDoc.setFont('helvetica', 'normal');
   typedDoc.text('BANK', marginLeft + boxWidth + 45, y + 18);
 
@@ -1497,7 +1530,7 @@ export function generateBuktiMasukDollarPDF(
   typedDoc.setFont('helvetica', 'bold');
   typedDoc.text('Diterima dari', labelX, y);
   typedDoc.setFont('helvetica', 'normal');
-  typedDoc.text(`: ${data?.invoiceEkspor?.spb?.purchaseOrder?.customerName || '-'}`, valueX, y);
+  typedDoc.text(`: ${data?.receivedFrom || '-'}`, valueX, y);
   typedDoc.text('.'.repeat(160), valueX, y + 2); // garis bawah titik-titik
 
   y += 7;
@@ -1515,7 +1548,7 @@ export function generateBuktiMasukDollarPDF(
   typedDoc.setFont('helvetica', 'bold');
   typedDoc.text('Untuk', labelX, y);
   typedDoc.setFont('helvetica', 'normal');
-  typedDoc.text(': -', valueX, y);
+  typedDoc.text(`: ${data?.purpose || '-'}`, valueX, y);
   typedDoc.text('.'.repeat(160), valueX, y + 2); // garis bawah titik-titik
 
   y += 5;
@@ -1557,6 +1590,9 @@ export function generateBuktiMasukDollarPDF(
       font: 'helvetica',
       fontSize: 10,
       cellPadding: 2,
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
     },
     headStyles: {
       fillColor: [255, 255, 255],
@@ -1564,6 +1600,7 @@ export function generateBuktiMasukDollarPDF(
       fontStyle: 'bold',
       lineWidth: 0.1,
       halign: 'center',
+      lineColor: [0, 0, 0],
     },
     columnStyles: {
       0: { cellWidth: 100 },
@@ -1599,18 +1636,24 @@ export function generateBuktiMasukDollarPDF(
     ],
     styles: {
       fontSize: 10,
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
     },
     bodyStyles: {
       fontSize: 10,
       cellPadding: { top: 35 },
       halign: 'center',
       valign: 'bottom',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
     },
     headStyles: {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       lineWidth: 0.1,
       halign: 'center',
+
+      lineColor: [0, 0, 0],
     },
     theme: 'grid',
     columnStyles: {
@@ -1645,6 +1688,7 @@ export function generateBuktiMasukDollarPDF(
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 }
+
 export function generateBuktiKeluarPDF(
   data: any,
   datePrint: Dayjs | null,
@@ -1652,6 +1696,10 @@ export function generateBuktiKeluarPDF(
 ) {
   const doc = new jsPDF();
   const typedDoc = doc as jsPDF & { lastAutoTable: { finalY: number } };
+  const bankName = data?.bank_account?.bankName?.trim().toUpperCase();
+
+  const isKas = bankName === 'KAS';
+  const isBank = Boolean(bankName) && bankName !== 'KAS';
 
   const marginLeft = 10;
   const marginTop = 10;
@@ -1687,12 +1735,23 @@ export function generateBuktiKeluarPDF(
   typedDoc.rect(marginLeft + boxWidth + 20, y + 15, 5, 5); // KAS
   typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
 
-  // Buat checkbox
-  typedDoc.rect(marginLeft + boxWidth + 37, y + 15, 5, 5);
-  // Label teks
-  typedDoc.setFont('helvetica', 'bold');
-  typedDoc.setFontSize(10);
-  typedDoc.text('V', marginLeft + boxWidth + 38, y + 19);
+  // Checkbox KAS
+  const kasCheckboxX = marginLeft + boxWidth + 20;
+  typedDoc.rect(kasCheckboxX, y + 15, 5, 5);
+  if (isKas) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', kasCheckboxX + 1, y + 19);
+  }
+  typedDoc.setFont('helvetica', 'normal');
+  typedDoc.text('KAS', marginLeft + boxWidth + 27, y + 18);
+
+  // Checkbox BANK
+  const bankCheckboxX = marginLeft + boxWidth + 37;
+  typedDoc.rect(bankCheckboxX, y + 15, 5, 5);
+  if (isBank) {
+    typedDoc.setFont('helvetica', 'bold');
+    typedDoc.text('V', bankCheckboxX + 1, y + 19);
+  }
   typedDoc.setFont('helvetica', 'normal');
   typedDoc.text('BANK', marginLeft + boxWidth + 45, y + 18);
 
@@ -1795,6 +1854,9 @@ export function generateBuktiKeluarPDF(
       font: 'helvetica',
       fontSize: 10,
       cellPadding: 2,
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
     },
     headStyles: {
       fillColor: [255, 255, 255],
@@ -1802,6 +1864,7 @@ export function generateBuktiKeluarPDF(
       fontStyle: 'bold',
       lineWidth: 0.1,
       halign: 'center',
+      lineColor: [0, 0, 0],
     },
     columnStyles: {
       0: { cellWidth: 100 },
@@ -1837,18 +1900,21 @@ export function generateBuktiKeluarPDF(
     ],
     styles: {
       fontSize: 10,
+      lineColor: [0, 0, 0],
     },
     bodyStyles: {
       fontSize: 10,
       cellPadding: { top: 35 },
       halign: 'center',
       valign: 'bottom',
+      lineColor: [0, 0, 0],
     },
     headStyles: {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       lineWidth: 0.1,
       halign: 'center',
+      lineColor: [0, 0, 0],
     },
     theme: 'grid',
     columnStyles: {
@@ -1883,6 +1949,7 @@ export function generateBuktiKeluarPDF(
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 }
+
 export const generateSalesReport = (
   data: SalesReportInterfaces.SalesReportInterfaces[],
   title: string = 'Laporan Penjualan RA',

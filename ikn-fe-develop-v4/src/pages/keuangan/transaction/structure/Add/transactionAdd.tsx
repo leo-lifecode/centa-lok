@@ -130,6 +130,8 @@ export default function TransactionAdd() {
         amount,
         jumlahBayar: isManual ? amount : values.jumlahBayar,
         description: values.description || '-',
+        receivedFrom: values.receivedFrom || null,
+purpose: values.purpose || null,
 
         // Mode manual tidak mengirim invoiceId.
         ...(!isManual && { invoiceId: values.invoiceId }),
@@ -599,6 +601,22 @@ export default function TransactionAdd() {
                     placeholder="Jumlah"
                   />
                 </Form.Item>
+
+                <Form.Item
+  label="Diterima Dari"
+  name="receivedFrom"
+  style={{ flex: 1, width: '100%' }}
+>
+  <Input placeholder="Masukan nama pengirim / sumber penerimaan" />
+</Form.Item>
+
+<Form.Item
+  label="Untuk"
+  name="purpose"
+  style={{ flex: 1, width: '100%' }}
+>
+  <TextArea rows={2} placeholder="Masukan tujuan penerimaan uang" />
+</Form.Item>
               </Col>
 
               <Col xs={24} sm={12}>

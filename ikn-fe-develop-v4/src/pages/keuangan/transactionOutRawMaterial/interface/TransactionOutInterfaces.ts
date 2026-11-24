@@ -6,7 +6,7 @@ export interface TransactionOutType {
   accountCode: string;
   bank_account_id: string;
   BankaccountCode?: string;
-   materialId?: string;
+  materialId?: string;
   date: Date | string;
   taxType?: string;
   taxValue?: number;
@@ -27,4 +27,20 @@ export type UpdateCashOutRawMaterialPayload = {
   accountCode?: string;
   unitId?: string;
   to?: string;
-}
+  address?: string;
+  materialId?: string;
+  taxType?: string;
+  taxValue?: number;
+  accounIdTax?: string;
+  numberJurnal?: string;
+  kategori?: string;
+  cashBankTransactionDetails: {
+    unitId?: string;
+    description: string;
+    accountCode?: string;
+    accountName?: string;
+    keterangan?: string;
+    debit?: number;
+    credit?: number;
+  }[];
+};

@@ -84,11 +84,13 @@ const translateOne = (raw: string): { key: string; text: string } => {
 };
 
 const GENERIC: Record<string, string> = {
-	'An unexpected server error occurred': 'Terjadi kesalahan pada server. Silakan coba lagi, atau hubungi admin jika terus berulang.',
-	'An unexpected database error occurred': 'Terjadi kesalahan pada database. Silakan coba lagi, atau hubungi admin jika terus berulang.',
+	'An unexpected server error occurred':
+		'Terjadi kesalahan pada server. Silakan coba lagi, atau hubungi admin jika terus berulang.',
+	'An unexpected database error occurred':
+		'Terjadi kesalahan pada database. Silakan coba lagi, atau hubungi admin jika terus berulang.',
 	'Bad Request Exception': 'Data yang dikirim belum lengkap atau belum benar. Mohon periksa kembali isian Anda.',
 	'Transaction error: API issue with transaction.':
-	'Koneksi lambat atau terputus (waktu tunggu habis). Periksa koneksi jaringan Anda lalu coba lagi. Muat ulang daftar untuk memastikan data sudah tersimpan atau belum.',
+		'Koneksi lambat atau terputus (waktu tunggu habis). Periksa koneksi jaringan Anda lalu coba lagi. Muat ulang daftar untuk memastikan data sudah tersimpan atau belum.',
 	Unauthorized: 'Sesi Anda sudah berakhir. Silakan login kembali.',
 	Forbidden: 'Anda tidak memiliki akses untuk melakukan tindakan ini.',
 	'Forbidden resource': 'Anda tidak memiliki akses untuk melakukan tindakan ini.',

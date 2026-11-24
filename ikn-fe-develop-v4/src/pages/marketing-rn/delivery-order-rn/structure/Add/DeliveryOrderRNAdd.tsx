@@ -22,6 +22,7 @@ import {
   InputNumber,
 } from 'antd';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import * as DeliveryOrderRNAxios from '@pages/marketing-rn/delivery-order-rn/service/DeliveryOrderRNAxios';
 import { useNavigate } from 'react-router';
 import * as globalHelpers from '@/utils/helper';
@@ -42,6 +43,7 @@ import { showNotification } from '@/contexts/services/notificationService';
 
 export default function DeliveryOrderRNAdd() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [openDrawer, seOpenDrawer] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -71,6 +73,7 @@ export default function DeliveryOrderRNAdd() {
         purchaseOrderId: values.purchaseOrderId,
         typeSalesDelivery: 'RN',
       });
+      await queryClient.invalidateQueries({ queryKey: ['delivery-order-rn'] });
       showNotification('success', 'Berhasil', 'Berhasil Menambahkan Data');
       setTimeout(() => {
         navigate('/delivery-order-prn');

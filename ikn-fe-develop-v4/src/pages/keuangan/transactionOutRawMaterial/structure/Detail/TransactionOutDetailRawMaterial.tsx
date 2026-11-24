@@ -139,7 +139,7 @@ export default function TransactionOutDetailRawMaterial() {
             {form.getFieldValue('description')}
           </Descriptions.Item>
 
-          <Descriptions.Item label="Tujuan Transaksi" span={2}>
+          <Descriptions.Item label="Penerima" span={2}>
             {form.getFieldValue('to')}
           </Descriptions.Item>
 

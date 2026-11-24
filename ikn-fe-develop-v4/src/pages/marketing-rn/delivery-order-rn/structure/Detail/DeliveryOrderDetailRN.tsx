@@ -271,7 +271,10 @@ export default function DeliveryOrderDetailRN() {
                 gap: 0,
               }}
             >
-              <p>Rp. {globalHelpers.currencyFormatter(Number(form.getFieldValue('totalAmount') || 0))}</p>
+              <p>
+                Rp.{' '}
+                {globalHelpers.currencyFormatter(Number(form.getFieldValue('totalAmount') || 0))}
+              </p>
               <p
                 style={{
                   color: 'green',

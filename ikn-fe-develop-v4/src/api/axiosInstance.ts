@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { getAccessToken, setTokens, clearTokens, decodeToken } from './authService';
 import type { InternalAxiosRequestConfig } from 'axios';
+import { isConnectionError, markConnectionError } from '@/utils/connectionError';
 
 const api = axios.create({
   baseURL: '/', // ganti sesuai API-mu
@@ -233,6 +234,7 @@ const processQueue = (error: unknown, token: string | null = null) => {
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
+    if (isConnectionError(error)) markConnectionError();
     const originalRequest = error.config as AxiosRequestConfig & {
       _retry?: boolean;
     };

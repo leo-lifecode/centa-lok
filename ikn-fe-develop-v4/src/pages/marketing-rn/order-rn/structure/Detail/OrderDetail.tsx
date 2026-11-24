@@ -315,9 +315,7 @@ export default function OrderPRNDetail() {
                 gap: 0,
               }}
             >
-              <p>
-                Rp. {globalHelpers.currencyFormatter(totalTagihan)}
-              </p>
+              <p>Rp. {globalHelpers.currencyFormatter(totalTagihan)}</p>
               <p
                 style={{
                   color: 'green',

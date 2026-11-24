@@ -229,7 +229,6 @@ export default function SpbsAdd() {
   ];
 
   const handleRowDoubleClick = async (record: SpbsInterfaces.DeliverySpbType) => {
- 
     try {
       const data = await SpbsAxios.fetchDataStokLogByOrderNumber(record.purchaseOrder.orderNumber);
 
@@ -275,7 +274,7 @@ export default function SpbsAdd() {
       } else {
         setDataSourceItems(record.purchaseOrder.items as any);
       }
-       setOpen((open) => !open);
+      setOpen((open) => !open);
     } catch (e) {
       showNotification('error', 'Gagal', 'Gagal memuat data pesanan');
     } finally {

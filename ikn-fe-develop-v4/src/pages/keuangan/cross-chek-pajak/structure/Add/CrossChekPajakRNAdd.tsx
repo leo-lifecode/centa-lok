@@ -126,7 +126,7 @@ export default function CrossChekPajakRNAdd() {
         'Gagal',
         Array.isArray(backendMessage)
           ? backendMessage.join(', ')
-          : backendMessage || 'Gagal Menambahkan Data',
+          : backendMessage || 'Gagal Menambahkan Data'
       );
     }
   };
@@ -417,10 +417,7 @@ export default function CrossChekPajakRNAdd() {
           </Col>
 
           <Col xs={24} sm={12}>
-            <Form.Item
-              label="Keterangan"
-              name="description"
-            >
+            <Form.Item label="Keterangan" name="description">
               <Input
                 disabled
                 style={{ width: '100%' }}

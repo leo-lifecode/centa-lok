@@ -228,7 +228,8 @@ export default function TransactionUpdate() {
           amount,
           jumlahBayar: isManual ? amount : values?.jumlahBayar,
           description: values?.description || '-',
-
+          receivedFrom: values?.receivedFrom || null,
+          purpose: values?.purpose || null,
           // Invoice hanya dikirim untuk transaksi Invoice.
           ...(!isManual && {
             invoiceId: values?.invoiceId,
@@ -378,7 +379,10 @@ export default function TransactionUpdate() {
         amount: Number(data?.amountInIDR || 0),
         jumlahBayar: Number(data?.amountInIDR || 0),
         description: data?.description || '-',
+        receivedFrom: data?.receivedFrom || '',
+        purpose: data?.purpose || '',
         transactionNumber: data?.transactionNumber || '-',
+
         nomorAkun: data?.bank_account?.bankAccountNumber || '-',
         unitId: data?.unitId,
         bankAccountId: data?.bank_account_id,
@@ -635,6 +639,18 @@ export default function TransactionUpdate() {
                     prefix={<span>Rp</span>}
                     placeholder="Jumlah"
                   />
+                </Form.Item>
+
+                <Form.Item
+                  label="Diterima Dari"
+                  name="receivedFrom"
+                  style={{ flex: 1, width: '100%' }}
+                >
+                  <Input placeholder="Masukan nama pengirim / sumber penerimaan" />
+                </Form.Item>
+
+                <Form.Item label="Untuk" name="purpose" style={{ flex: 1, width: '100%' }}>
+                  <TextArea rows={2} placeholder="Masukan tujuan penerimaan uang" />
                 </Form.Item>
               </Col>
 

@@ -9,29 +9,24 @@ import {
   TableColumnType,
   Card,
   Pagination,
-} from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+} from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { EnvelopeOpen, MagnifyingGlass } from "@phosphor-icons/react";
-import type { FilterDropdownProps } from "antd/es/table/interface";
-import Highlighter from "react-highlight-words";
-import {
-  DatePicker,
-  InputNumber,
-  Select,
-  Tag,
-} from "antd";
+import { EnvelopeOpen, MagnifyingGlass } from '@phosphor-icons/react';
+import type { FilterDropdownProps } from 'antd/es/table/interface';
+import Highlighter from 'react-highlight-words';
+import { DatePicker, InputNumber, Select, Tag } from 'antd';
 
-import * as OrderPraAxios from "@pages/marketing/order-pra/service/OrderPraAxios";
+import * as OrderPraAxios from '@pages/marketing/order-pra/service/OrderPraAxios';
 
-import dayjs from "dayjs";
-import timezone from "dayjs/plugin/timezone";
-import utc from "dayjs/plugin/utc";
-import { currencyFormatter } from "@/utils/helper";
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+import { currencyFormatter } from '@/utils/helper';
 // Extend dayjs dengan plugin
 dayjs.extend(utc);
 dayjs.extend(timezone);
-import * as DeliveryOrderPraInterfaces from "@pages/marketing/delivery-order-pra/interface/DeliveryOrderPraInterfaces"
+import * as DeliveryOrderPraInterfaces from '@pages/marketing/delivery-order-pra/interface/DeliveryOrderPraInterfaces';
 type DataIndex = keyof DeliveryOrderPraInterfaces.DatumType;
 
 const renderInput = (
@@ -41,56 +36,48 @@ const renderInput = (
   handleSearch: Function,
   searchInput: any
 ) => {
-  const commonStyle = { marginBottom: 8, display: "block", width: "100%" };
+  const commonStyle = { marginBottom: 8, display: 'block', width: '100%' };
 
   const handleDateChange = (format: string) => (value: dayjs.Dayjs | null) => {
     setSelectedKeys(value ? [value.format(format)] : []);
   };
 
-  if (dataIndex.includes("periode_month")) {
+  if (dataIndex.includes('periode_month')) {
     return (
       <DatePicker
         format="MM/YYYY"
         picker="month"
-        value={
-          selectedKeys[0]
-            ? dayjs(String(selectedKeys[0]), "MM/YYYY")
-            : undefined
-        }
-        onChange={handleDateChange("MM/YYYY")}
+        value={selectedKeys[0] ? dayjs(String(selectedKeys[0]), 'MM/YYYY') : undefined}
+        onChange={handleDateChange('MM/YYYY')}
         style={commonStyle}
       />
     );
   }
 
-  if (dataIndex.includes("date")) {
+  if (dataIndex.includes('date')) {
     return (
       <DatePicker
         value={selectedKeys[0] ? dayjs(String(selectedKeys[0])) : undefined}
-        onChange={handleDateChange("YYYY-MM-DDTHH:mm:ss.SSSZ")}
+        onChange={handleDateChange('YYYY-MM-DDTHH:mm:ss.SSSZ')}
         style={commonStyle}
       />
     );
   }
 
-  if (dataIndex.includes("value_rkap")) {
+  if (dataIndex.includes('value_rkap')) {
     return (
       <InputNumber
         placeholder={`Search ${dataIndex}`}
         value={Number(selectedKeys[0]) || 0}
-        onChange={(value) =>
-          setSelectedKeys(value !== undefined && value !== null ? [value] : [])
-        }
-        onPressEnter={() =>
-          handleSearch(selectedKeys as string[], confirm, dataIndex)
-        }
+        onChange={(value) => setSelectedKeys(value !== undefined && value !== null ? [value] : [])}
+        onPressEnter={() => handleSearch(selectedKeys as string[], confirm, dataIndex)}
         controls={false}
         style={commonStyle}
       />
     );
   }
 
-  if (dataIndex.includes("status")) {
+  if (dataIndex.includes('status')) {
     return (
       <Select
         showSearch
@@ -99,10 +86,10 @@ const renderInput = (
         value={selectedKeys[0]}
         onChange={(value) => setSelectedKeys(value ? [value] : [])}
         options={[
-          { value: "PENDING", label: "PENDING" },
-          { value: "APPROVED", label: "APPROVED" },
-          { value: "REJECTED", label: "REJECTED" },
-          { value: "VERIFED", label: "VERIFED" },
+          { value: 'PENDING', label: 'PENDING' },
+          { value: 'APPROVED', label: 'APPROVED' },
+          { value: 'REJECTED', label: 'REJECTED' },
+          { value: 'VERIFED', label: 'VERIFED' },
         ]}
         style={commonStyle}
       />
@@ -115,9 +102,7 @@ const renderInput = (
       placeholder={`Search ${dataIndex}`}
       value={selectedKeys[0]}
       onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-      onPressEnter={() =>
-        handleSearch(selectedKeys as string[], confirm, dataIndex)
-      }
+      onPressEnter={() => handleSearch(selectedKeys as string[], confirm, dataIndex)}
       style={commonStyle}
     />
   );
@@ -132,8 +117,8 @@ export default function ModalDeliveryPoRN({
   open: boolean;
   handleRowDoubleClick: Function;
 }>) {
-  const [searchText, setSearchText] = useState("");
-  const [searchedColumn, setSearchedColumn] = useState("");
+  const [searchText, setSearchText] = useState('');
+  const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef<InputRef>(null);
   const [dataTable, setTable] = useState({
     data: [],
@@ -144,8 +129,8 @@ export default function ModalDeliveryPoRN({
     total: 0,
     status: null,
     selectionStatus: 'NOT_SELECTED',
-    typePo: "RN",
-    // Pajak sudah diinput di Pemesanan RN (sama seperti RA), jadi tidak perlu lewat Cek Pajak dulu.
+    typePo: 'RN',
+    // cekPajak: "YES"
   });
 
   useEffect(() => {
@@ -167,13 +152,13 @@ export default function ModalDeliveryPoRN({
   );
 
   const shouldDisableRow = (record: any) => {
-    if (record.status === "DELIVERY") return true;
+    if (record.status === 'DELIVERY') return true;
     return false;
   };
 
   const handleSearch = (
     selectedKeys: string[],
-    confirm: FilterDropdownProps["confirm"],
+    confirm: FilterDropdownProps['confirm'],
     dataIndex: DataIndex
   ) => {
     confirm();
@@ -182,11 +167,11 @@ export default function ModalDeliveryPoRN({
 
   const handleReset = (
     clearFilters: () => void,
-    confirm: FilterDropdownProps["confirm"],
+    confirm: FilterDropdownProps['confirm'],
     dataIndex: string
   ) => {
     clearFilters();
-    setSearchText("");
+    setSearchText('');
     confirm();
     setTable((prev) => ({ ...prev, [dataIndex]: null }));
   };
@@ -194,35 +179,21 @@ export default function ModalDeliveryPoRN({
   const getColumnSearchProps = (
     dataIndex: DataIndex
   ): TableColumnType<DeliveryOrderPraInterfaces.DatumType> => ({
-    filterDropdown: ({
-      setSelectedKeys,
-      selectedKeys,
-      confirm,
-      clearFilters,
-      close,
-    }) => (
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters, close }) => (
       <div
         style={{
           padding: 8,
-          background: "white",
+          background: 'white',
           zIndex: 99999,
-          position: "relative",
+          position: 'relative',
         }}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {renderInput(
-          dataIndex,
-          setSelectedKeys,
-          selectedKeys,
-          handleSearch,
-          searchInput
-        )}
+        {renderInput(dataIndex, setSelectedKeys, selectedKeys, handleSearch, searchInput)}
         <Space>
           <Button
             type="primary"
-            onClick={() =>
-              handleSearch(selectedKeys as string[], confirm, dataIndex)
-            }
+            onClick={() => handleSearch(selectedKeys as string[], confirm, dataIndex)}
             icon={<MagnifyingGlass />}
             size="small"
             style={{ width: 90 }}
@@ -230,9 +201,7 @@ export default function ModalDeliveryPoRN({
             Search
           </Button>
           <Button
-            onClick={() =>
-              clearFilters && handleReset(clearFilters, confirm, dataIndex)
-            }
+            onClick={() => clearFilters && handleReset(clearFilters, confirm, dataIndex)}
             size="small"
             style={{ width: 90 }}
           >
@@ -262,7 +231,7 @@ export default function ModalDeliveryPoRN({
       </div>
     ),
     filterIcon: (filtered: boolean) => (
-      <MagnifyingGlass style={{ color: filtered ? "#1677ff" : undefined }} />
+      <MagnifyingGlass style={{ color: filtered ? '#1677ff' : undefined }} />
     ),
     filterDropdownProps: {
       onOpenChange(open) {
@@ -274,10 +243,10 @@ export default function ModalDeliveryPoRN({
     render: (text) =>
       searchedColumn === dataIndex ? (
         <Highlighter
-          highlightStyle={{ backgroundColor: "#ffc069", padding: 0 }}
+          highlightStyle={{ backgroundColor: '#ffc069', padding: 0 }}
           searchWords={[searchText]}
           autoEscape
-          textToHighlight={text ? text.toString() : ""}
+          textToHighlight={text ? text.toString() : ''}
         />
       ) : (
         text
@@ -286,60 +255,58 @@ export default function ModalDeliveryPoRN({
 
   const baseColumns: TableColumnsType<DeliveryOrderPraInterfaces.DatumType> = [
     {
-      title: "Nomor Pesanan",
-      dataIndex: "orderNumber",
+      title: 'Nomor Pesanan',
+      dataIndex: 'orderNumber',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("orderNumber"),
+      align: 'center',
+      ...getColumnSearchProps('orderNumber'),
     },
     {
-      title: "Deskripsi",
-      dataIndex: "description",
+      title: 'Deskripsi',
+      dataIndex: 'description',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("description"),
+      align: 'center',
+      ...getColumnSearchProps('description'),
     },
     {
-      title: "Tanggal Pembuatan",
-      dataIndex: "date",
+      title: 'Tanggal Pembuatan',
+      dataIndex: 'date',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("date"),
-      render: (_: any, record: any) => (
-        <span>{dayjs(record.date).format("DD MMM YYYY")}</span>
-      ),
+      align: 'center',
+      ...getColumnSearchProps('date'),
+      render: (_: any, record: any) => <span>{dayjs(record.date).format('DD MMM YYYY')}</span>,
     },
 
     {
-      title: "Franco",
-      dataIndex: "franco",
+      title: 'Franco',
+      dataIndex: 'franco',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("franco"),
+      align: 'center',
+      ...getColumnSearchProps('franco'),
     },
-    
+
     {
-      title: "Total Harga",
-      dataIndex: "subtotalAmount",
+      title: 'Total Harga',
+      dataIndex: 'subtotalAmount',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("subtotalAmount"),
-      render: (subtotalAmount:number) => {
-        return <span>Rp{currencyFormatter(subtotalAmount || 0)}</span>
-      }
+      align: 'center',
+      ...getColumnSearchProps('subtotalAmount'),
+      render: (subtotalAmount: number) => {
+        return <span>Rp{currencyFormatter(subtotalAmount || 0)}</span>;
+      },
     },
     {
-      title: "Status",
-      dataIndex: "status",
+      title: 'Status',
+      dataIndex: 'status',
       width: 200,
-      align: "center",
-      ...getColumnSearchProps("status"),
+      align: 'center',
+      ...getColumnSearchProps('status'),
       render: (_: any, record: any) => {
         const color: any = {
-          PENDING: "orange",
-          APPROVED: "green",
-          REJECTED: "error",
-          VERIFED: "cyan",
+          PENDING: 'orange',
+          APPROVED: 'green',
+          REJECTED: 'error',
+          VERIFED: 'cyan',
         };
         return <Tag color={color[record.status]}>{record.status}</Tag>;
       },
@@ -347,29 +314,33 @@ export default function ModalDeliveryPoRN({
   ];
   const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
     const sortField = sorter.field;
-    const sortOrder = sorter.order === "ascend" ? "asc" : "desc";
+    const sortOrder = sorter.order === 'ascend' ? 'asc' : 'desc';
     setTable((prev) => ({ ...prev, sortBy: sortField, sortOrder: sortOrder }));
   };
 
   return (
     <Modal
-      title={<div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 5
-      }}>
-        <EnvelopeOpen size={20}/>
-        <p>Pilih Pesanan</p>
-      </div>}
+      title={
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          <EnvelopeOpen size={20} />
+          <p>Pilih Pesanan</p>
+        </div>
+      }
       loading={dataTable.loading}
       open={open}
       width={{
-        xs: "90%",
-        sm: "80%",
-        md: "70%",
-        lg: "60%",
-        xl: "50%",
-        xxl: "40%",
+        xs: '90%',
+        sm: '80%',
+        md: '70%',
+        lg: '60%',
+        xl: '50%',
+        xxl: '40%',
       }}
       onCancel={() => setOpen(false)}
       footer={[
@@ -381,33 +352,31 @@ export default function ModalDeliveryPoRN({
       <Table<DeliveryOrderPraInterfaces.DatumType>
         rowKey="key"
         bordered={true}
-        scroll={{ x: "max-content" }} // Hindari overflow
+        scroll={{ x: 'max-content' }} // Hindari overflow
         columns={baseColumns}
         dataSource={dataSource}
         loading={dataTable.loading}
         onChange={handleTableChange}
         pagination={false}
         rowClassName={(record, index) => {
-          if (shouldDisableRow(record)) return "table-row-red";
-          return index % 2 === 0 ? "table-row-light" : "table-row-dark";
+          if (shouldDisableRow(record)) return 'table-row-red';
+          return index % 2 === 0 ? 'table-row-light' : 'table-row-dark';
         }}
         onRow={(record) => {
           const disabled = shouldDisableRow(record);
           return {
-            onDoubleClick: disabled
-              ? undefined
-              : () => handleRowDoubleClick(record),
-            className: disabled ? "disabled-row bg-red" : "",
+            onDoubleClick: disabled ? undefined : () => handleRowDoubleClick(record),
+            className: disabled ? 'disabled-row bg-red' : '',
           };
         }}
       />
       <Card
         style={{
-          backgroundColor: "white",
+          backgroundColor: 'white',
           padding: 0,
-          textAlign: "center",
+          textAlign: 'center',
           marginTop: 10,
-          boxShadow: "0px 2px 5px rgba(0, 0, 0, 0.1)",
+          boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)',
         }}
       >
         <Pagination

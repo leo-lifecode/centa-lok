@@ -21,13 +21,21 @@ export const openUrl = (url: string) => {
 // Pesan teknis dari browser/axios/JS diganti kalimat yang mudah dipahami.
 const friendlyTechnicalMessage = (msg: unknown, fallback: string): string => {
   const raw = Array.isArray(msg) ? msg.join('; ') : String(msg ?? '');
-  if (/^Network Error$/i.test(raw)) return 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.';
-  if (/timeout|ECONNABORTED|waktu tunggu habis|Transaction already closed/i.test(raw)) return 'Koneksi lambat atau terputus (waktu tunggu habis). Periksa koneksi jaringan Anda lalu coba lagi.';
-  if (/Request failed with status code 5\d\d/i.test(raw)) return 'Terjadi kesalahan pada server. Silakan coba lagi.';
+  if (/^Network Error$/i.test(raw))
+    return 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.';
+  if (/timeout|ECONNABORTED|waktu tunggu habis|Transaction already closed/i.test(raw))
+    return 'Koneksi lambat atau terputus (waktu tunggu habis). Periksa koneksi jaringan Anda lalu coba lagi.';
+  if (/timeout/i.test(raw)) return 'Server terlalu lama merespons. Silakan coba lagi.';
+  if (/Request failed with status code 5\d\d/i.test(raw))
+    return 'Terjadi kesalahan pada server. Silakan coba lagi.';
   if (/Request failed with status code 404/i.test(raw)) return 'Data yang dicari tidak ditemukan.';
-  if (/Request failed with status code 40[03]/i.test(raw)) return `${fallback}. Mohon periksa kembali isian Anda.`;
-  if (/Failed to upload file/i.test(raw)) return 'File gagal diunggah. Pastikan ukuran dan format file sesuai, lalu coba lagi.';
-  if (/Cannot read properties|undefined|is not a function|is not defined|Unexpected token/i.test(raw))
+  if (/Request failed with status code 40[03]/i.test(raw))
+    return `${fallback}. Mohon periksa kembali isian Anda.`;
+  if (/Failed to upload file/i.test(raw))
+    return 'File gagal diunggah. Pastikan ukuran dan format file sesuai, lalu coba lagi.';
+  if (
+    /Cannot read properties|undefined|is not a function|is not defined|Unexpected token/i.test(raw)
+  )
     return `${fallback}. Terjadi kendala pada halaman, silakan muat ulang atau hubungi admin.`;
   return raw || fallback;
 };

@@ -13,12 +13,6 @@ import { UpdateOrderPoPraDto } from './dto/update-order-po-pra.dto';
 export class OrderPoPraService {
 	constructor(private readonly prisma: PrismaService) {}
 
-	/**
-	 * Validasi pajak RN berdasarkan master Tax yang aktif.
-	 * Mengikuti perilaku perhitungan Purchase Order RA saat ini:
-	 * Semua nominal pajak dihitung dari tarif master seperti form RA.
-	 * Hanya PPN yang menambah total tagihan, mengikuti perilaku PO RA saat ini.
-	 */
 	private async prepareRnTaxes(
 		client: Prisma.TransactionClient,
 		taxes: PurchaseOrderTaxDto[] | undefined,
@@ -88,73 +82,79 @@ export class OrderPoPraService {
 	async create(createOrderPoRubberDto: CreateOrderPoPraDto, decoded: DecodeTokenType) {
 		try {
 			return this.prisma.$transaction(async (tx) => {
-				const rnTaxData = createOrderPoRubberDto.typePo === 'RN'
-					? await this.prepareRnTaxes(tx, createOrderPoRubberDto.taxes, Number(createOrderPoRubberDto.subtotalAmount))
-					: null;
+				const rnTaxData =
+					createOrderPoRubberDto.typePo === 'RN'
+						? await this.prepareRnTaxes(tx, createOrderPoRubberDto.taxes, Number(createOrderPoRubberDto.subtotalAmount))
+						: null;
 
 				return tx.purchaseOrder.create({
-				data: {
-					orderNumber: createOrderPoRubberDto.orderNumber,
-					date: createOrderPoRubberDto.date,
-					invoiceSelectionStatus: 'NOT_SELECTED',
-					kebun: createOrderPoRubberDto.kebun,
-					description: createOrderPoRubberDto.description,
-					franco: createOrderPoRubberDto.franco,
-					fileUrl: createOrderPoRubberDto.file,
-					fileUrlKontrak: createOrderPoRubberDto.fileKontrak,
-					fileUrlEkspor: createOrderPoRubberDto.fileUrlEkspor,
-					fileUrlProduksi: createOrderPoRubberDto.fileUrlProduksi,
-					subtotalAmount: +createOrderPoRubberDto.subtotalAmount,
-					taxAmount: rnTaxData?.taxAmount ?? createOrderPoRubberDto?.taxes?.reduce((total, tax) => total + Number(tax.taxAmount), 0) ?? 0,
-					totalAmount: rnTaxData?.totalAmount ?? (createOrderPoRubberDto.totalAmount != null ? Number(createOrderPoRubberDto.totalAmount) : 0),
-					customerName: createOrderPoRubberDto.customerName,
-					customerId: createOrderPoRubberDto.customerId,
-					staffId: decoded.id,
-					unitId: decoded.unitId,
-					typePo: createOrderPoRubberDto.typePo,
-					typePayment: createOrderPoRubberDto.typePayment,
-					downPayment: createOrderPoRubberDto.downPayment,
-					currency: createOrderPoRubberDto.currency,
-					incoterms: createOrderPoRubberDto.incoterms,
-					items: {
-						create: createOrderPoRubberDto.items.map((item) => ({
-							productId: item.productId,
-							quantity: +item.quantity,
-							orderNumber: createOrderPoRubberDto.orderNumber,
-							orderDate: createOrderPoRubberDto.date,
-							total: item.beratproduct,
-							beratproduct: +item.nilaiSatuan,
-							kategoriProduct: item.kategoriProduct,
-							kodeBarangProduct: item.kodeBarangProduct,
-							namabarangProduct: item.namabarangProduct,
-							priceProduct: +item.priceProduct,
-							satuanProduct: item.satuanProduct,
-							spesifikasiProduct: item.spesifikasiProduct,
-							stockProduct: +item.stockProduct,
-							unitProduct: item.unitProduct,
-							namabarangProductInvoice: item.namabarangProductInvoice,
-						})),
+					data: {
+						orderNumber: createOrderPoRubberDto.orderNumber,
+						date: createOrderPoRubberDto.date,
+						invoiceSelectionStatus: 'NOT_SELECTED',
+						kebun: createOrderPoRubberDto.kebun,
+						description: createOrderPoRubberDto.description,
+						franco: createOrderPoRubberDto.franco,
+						fileUrl: createOrderPoRubberDto.file,
+						fileUrlKontrak: createOrderPoRubberDto.fileKontrak,
+						fileUrlEkspor: createOrderPoRubberDto.fileUrlEkspor,
+						fileUrlProduksi: createOrderPoRubberDto.fileUrlProduksi,
+						subtotalAmount: +createOrderPoRubberDto.subtotalAmount,
+						taxAmount:
+							rnTaxData?.taxAmount ??
+							createOrderPoRubberDto?.taxes?.reduce((total, tax) => total + Number(tax.taxAmount), 0) ??
+							0,
+						totalAmount:
+							rnTaxData?.totalAmount ??
+							(createOrderPoRubberDto.totalAmount != null ? Number(createOrderPoRubberDto.totalAmount) : 0),
+						customerName: createOrderPoRubberDto.customerName,
+						customerId: createOrderPoRubberDto.customerId,
+						staffId: decoded.id,
+						unitId: decoded.unitId,
+						typePo: createOrderPoRubberDto.typePo,
+						typePayment: createOrderPoRubberDto.typePayment,
+						downPayment: createOrderPoRubberDto.downPayment,
+						currency: createOrderPoRubberDto.currency,
+						incoterms: createOrderPoRubberDto.incoterms,
+						items: {
+							create: createOrderPoRubberDto.items.map((item) => ({
+								productId: item.productId,
+								quantity: +item.quantity,
+								orderNumber: createOrderPoRubberDto.orderNumber,
+								orderDate: createOrderPoRubberDto.date,
+								total: item.beratproduct,
+								beratproduct: +item.nilaiSatuan,
+								kategoriProduct: item.kategoriProduct,
+								kodeBarangProduct: item.kodeBarangProduct,
+								namabarangProduct: item.namabarangProduct,
+								priceProduct: +item.priceProduct,
+								satuanProduct: item.satuanProduct,
+								spesifikasiProduct: item.spesifikasiProduct,
+								stockProduct: +item.stockProduct,
+								unitProduct: item.unitProduct,
+								namabarangProductInvoice: item.namabarangProductInvoice,
+							})),
+						},
+						additionalCharges: {
+							create: createOrderPoRubberDto?.additionalService?.map((item) => ({
+								amount: item.amount,
+								description: item.description,
+								type: item.type,
+							})),
+						},
+						PurchaseOrderTax: {
+							create: (rnTaxData?.taxes ?? createOrderPoRubberDto?.taxes)?.map((tax) => ({
+								taxId: tax.taxId,
+								taxType: tax.taxType,
+								taxValue: Number(tax.taxValue),
+								taxAmount: Number(tax.taxAmount),
+							})),
+						},
 					},
-					additionalCharges: {
-						create: createOrderPoRubberDto?.additionalService?.map((item) => ({
-							amount: item.amount,
-							description: item.description,
-							type: item.type,
-						})),
+					include: {
+						items: true,
+						PurchaseOrderTax: true,
 					},
-					PurchaseOrderTax: {
-						create: (rnTaxData?.taxes ?? createOrderPoRubberDto?.taxes)?.map((tax) => ({
-							taxId: tax.taxId,
-							taxType: tax.taxType,
-							taxValue: Number(tax.taxValue),
-							taxAmount: Number(tax.taxAmount),
-						})),
-					},
-				},
-				include: {
-					items: true,
-					PurchaseOrderTax: true,
-				},
 				});
 			});
 		} catch (e) {
@@ -361,18 +361,22 @@ export class OrderPoPraService {
 					where: { id: id },
 				});
 
-				const existingRnTaxes = currentOrder.typePo === 'RN' && updateOrderPoPraDto.taxes === undefined
-					? await tx.purchaseOrderTax.findMany({ where: { purchaseOrderId: id } })
-					: undefined;
-				const taxesForUpdate = updateOrderPoPraDto.taxes ?? existingRnTaxes?.map((tax) => ({
-					taxId: tax.taxId,
-					taxType: tax.taxType,
-					taxValue: tax.taxValue,
-					taxAmount: tax.taxAmount,
-				}));
-				const rnTaxData = currentOrder.typePo === 'RN'
-					? await this.prepareRnTaxes(tx, taxesForUpdate, Number(updateOrderPoPraDto.subtotalAmount))
-					: null;
+				const existingRnTaxes =
+					currentOrder.typePo === 'RN' && updateOrderPoPraDto.taxes === undefined
+						? await tx.purchaseOrderTax.findMany({ where: { purchaseOrderId: id } })
+						: undefined;
+				const taxesForUpdate =
+					updateOrderPoPraDto.taxes ??
+					existingRnTaxes?.map((tax) => ({
+						taxId: tax.taxId,
+						taxType: tax.taxType,
+						taxValue: tax.taxValue,
+						taxAmount: tax.taxAmount,
+					}));
+				const rnTaxData =
+					currentOrder.typePo === 'RN'
+						? await this.prepareRnTaxes(tx, taxesForUpdate, Number(updateOrderPoPraDto.subtotalAmount))
+						: null;
 
 				// 2. Hapus items dan additionalCharges lama
 				await tx.purchaseOrderItem.deleteMany({
@@ -397,9 +401,7 @@ export class OrderPoPraService {
 						fileUrlEkspor: updateOrderPoPraDto.fileUrlEkspor,
 						fileUrlProduksi: updateOrderPoPraDto.fileUrlProduksi,
 						subtotalAmount: +updateOrderPoPraDto.subtotalAmount,
-						totalAmount:
-							rnTaxData?.totalAmount ??
-							(updateOrderPoPraDto.totalAmount != null ? Number(updateOrderPoPraDto.totalAmount) : currentOrder.totalAmount),
+						totalAmount: rnTaxData?.totalAmount ?? Number(updateOrderPoPraDto.totalAmount),
 						...(rnTaxData ? { taxAmount: rnTaxData.taxAmount } : {}),
 						customerName: updateOrderPoPraDto.customerName,
 						customerId: updateOrderPoPraDto.customerId,
@@ -437,7 +439,6 @@ export class OrderPoPraService {
 				}
 
 				// 5. Simpan ulang pajak hanya untuk pesanan RN.
-				// Alur pajak tipe pesanan lain tidak disentuh.
 				if (currentOrder.typePo === 'RN') {
 					await tx.purchaseOrderTax.deleteMany({
 						where: { purchaseOrderId: id },

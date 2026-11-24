@@ -20,8 +20,8 @@ import * as globalInterfaces from '@/utils/interfaces/interfacesGlobal';
 import { handleDate, handleMessageError } from '@/utils/func/func';
 import dayjs from 'dayjs';
 import { useAppNavigate } from '@/hooks/React/useAppNavigate';
-import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from '@/hooks/React/useEffect';
 import { Button, Card, DatePicker, Input, InputNumber, Table } from '@/components/ui';
 import ModalHistoriOrder from '../Components/ModalHistoriOrder/ModalHistoriOrder';
@@ -169,7 +169,6 @@ export default function OrderRNAdd() {
         throw new Error('Failed to upload file');
       }
       await OrderRNAxios.posOrderRN(values);
-      // Segarkan seluruh variasi query daftar PO RN setelah data baru tersimpan.
       await queryClient.invalidateQueries({ queryKey: ['order-rn'] });
       showNotification('success', 'Berhasil', 'Berhasil Menambahkan Data');
       setTimeout(() => {
@@ -616,7 +615,9 @@ export default function OrderRNAdd() {
                     danger
                     onClick={() =>
                       setDataSourcePajak((previous) =>
-                        previous.filter((tax) => (tax.taxId || tax.id) !== (record.taxId || record.id))
+                        previous.filter(
+                          (tax) => (tax.taxId || tax.id) !== (record.taxId || record.id)
+                        )
                       )
                     }
                   >

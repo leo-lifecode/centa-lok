@@ -33,7 +33,7 @@ export default function TransactionDetail() {
     loading: false,
     name: '',
   });
-  const [dataAll, setDataAll] = useState([]);
+  const [dataAll, setDataAll] = useState<any>(null);
   globalHooks.useFetchOptions(unit, setUnit, TransactionAxios.fetchDataUnit, [unit.nama]);
   globalHooks.useFetchOptions(customer, setCustomer, TransactionAxios.fetchDataCustomer, [
     customer.name,
@@ -156,6 +156,14 @@ export default function TransactionDetail() {
           <Descriptions.Item label="Tanggal Masuk">
             {dayjs(form.getFieldValue('date')).format('DD/MMMM/YYYY')}
           </Descriptions.Item>
+
+          <Descriptions.Item label="Diterima Dari">
+  {dataAll?.receivedFrom || '-'}
+</Descriptions.Item>
+
+<Descriptions.Item label="Untuk">
+  {dataAll?.purpose || '-'}
+</Descriptions.Item>
         </Descriptions>
       </Card>
       <Card

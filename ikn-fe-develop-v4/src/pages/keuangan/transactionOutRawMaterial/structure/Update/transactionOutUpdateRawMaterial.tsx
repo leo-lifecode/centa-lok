@@ -1,7 +1,8 @@
-import { CalendarMinus, FilePdf, MapPin, TagChevron, Unite } from '@phosphor-icons/react';
+import { CalendarMinus, MapPin, TagChevron, Unite } from '@phosphor-icons/react';
 import {
   Card,
   Button,
+  Checkbox,
   Form,
   Row,
   Col,
@@ -15,7 +16,7 @@ import {
   Table,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import * as TransactionOutAxios from '@pages/keuangan/transactionOut/service/TransactionOutAxios';
+import * as TransactionOutAxiosMaterial from '@pages/keuangan/transactionOutRawMaterial/service/TransactionOutAxios';
 import { useNavigate, useParams } from 'react-router';
 import * as globalHelpers from '@/utils/helper';
 import { BookOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
@@ -26,20 +27,18 @@ import ButtonAdd from '@/components/atoms/button/buttonAdd';
 import TextTerbilang from '@/components/atoms/Text/TextTerbilang';
 import ModalNumberAccount from './ModalNumberAccount/ModalNumberAccount';
 
-import * as MasterAkunBankAxios from '@pages/master/master-akun-bank/service/MasterAkunBankAxios';
-import * as MasterAkunBankInterfaces from '@pages/master/master-akun-bank/interface/MasterAkunBankInterfaces';
-import * as TransactionOutInterfaces from '@pages/keuangan/transactionOut/interface/TransactionOutInterfaces';
+import * as TransactionOutInterfaces from '@pages/keuangan/transactionOutRawMaterial/interface/TransactionOutInterfaces';
 import * as AccountInterfaces from '@pages/master/account-index/account/interface/AccountInterfaces';
 import * as AccountAxios from '@pages/master/account-index/account/service/AccountAxios';
 import ModalPajak from './ModalPajak/ModalPajak';
 import * as hooksGlobal from '@/hooks';
 import * as UnitAxios from '@pages/master/unit/service/UnitAxios';
 import { showNotification } from '@/contexts/services/notificationService';
-import { handleDate, isValidCode } from '@/utils/func/func';
-import ModalRawMaterial from '../Add/ModalRawMaterial/ModalRawMaterial';
+import { isValidCode } from '@/utils/func/func';
 import ModalAccount from '@/components/ModalAccount/ModalAccount';
 
 const { TextArea } = Input;
+
 type JournalEntry = {
   key: string;
   accountCode: string | null;
@@ -48,15 +47,35 @@ type JournalEntry = {
   credit: number;
   accountName: string;
 };
+
+type TransactionFormValues = TransactionOutInterfaces.TransactionOutType & {
+  date: string | Dayjs;
+  unit: string;
+  amount: number;
+  payAmount: number;
+  materialId?: string | null;
+  namaAkun?: string;
+};
+
+const toNumber = (value: unknown): number => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function TransactionOutUpdateRawMaterial() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [form] = Form.useForm();
-  const [loading, setLoading] = useState<boolean>(false);
+  const [form] = Form.useForm<TransactionFormValues>();
+
+  const [loading, setLoading] = useState(false);
+  const [isManual, setIsManual] = useState<boolean | null>(null);
+  const [originalMaterialId, setOriginalMaterialId] = useState<string | null>(null);
+  const [maxMaterialPayment, setMaxMaterialPayment] = useState(0);
   const [openAccountNumber, setOpenAccountNumber] = useState(false);
   const [dataAccount, setDataAccount] = useState<AccountInterfaces.AccountType[]>([]);
-  const [open, setOpen] = useState<boolean>(false);
-  const [openKategori, setOpenKategori] = useState<boolean>(false);
+  const [openTax, setOpenTax] = useState(false);
+  const [openAccountDetails, setOpenAccountDetails] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<JournalEntry | null>(null);
 
   const [unit, setUnit] = useState({
     data: [],
@@ -67,161 +86,146 @@ export default function TransactionOutUpdateRawMaterial() {
     isAll: 'Y',
   });
 
-  const [entries, setEntries] = useState<JournalEntry[]>([
-    {
-      key: '1',
-      accountCode: null,
-      keterangan: '',
-      debit: 0,
-      credit: 0,
-      accountName: '',
-    },
-  ]);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+
+  const watchedPayAmount = Form.useWatch('payAmount', form);
 
   const totalCredit = useMemo(
-    () => entries.reduce((acc, cur) => acc + cur.credit, 0),
-    [entries, form.getFieldValue('payAmount')]
+    () => entries.reduce((total, item) => total + toNumber(item.credit), 0),
+    [entries]
   );
-  const totalDebit = useMemo(() => entries.reduce((acc, cur) => acc + cur.debit, 0), [entries]);
 
-  // unit
+  const totalDebit = useMemo(
+    () => entries.reduce((total, item) => total + toNumber(item.debit), 0),
+    [entries]
+  );
+
+  const totalCreditWithPayment = totalCredit + toNumber(watchedPayAmount);
+
   hooksGlobal.useFetchOptions(unit, setUnit, UnitAxios.fetchDataUnit, [unit.nama]);
+
   const onSearchUnit = hooksGlobal.useDebounce((searchText: string) => {
     setUnit((prev) => ({ ...prev, nama: searchText }));
   }, 1000);
 
-  const onFinish = async (values: TransactionOutInterfaces.TransactionOutType) => {
-    if ((totalCredit + form.getFieldValue('payAmount') || 0).toFixed(2) !== totalDebit.toFixed(2)) {
-      showNotification('warning', 'Perhatian', 'Total Credit dan Total Debit H  arus Sama');
-      return;
-    }
-    try {
-      if (id) {
-        const payload = {
-          transactionNumber: values.transactionNumber,
-          amount: values.amount,
-          description: values?.description || '-',
-          bank_account_id: values.bank_account_id,
-          date: handleDate(values?.date as Dayjs),
-          accountCode: values.accountCode,
-          accounIdTax: values.accounIdTax,
-          unitId: values.unit,
-          to: values.to,
-          address: values.address,
-          materialId: values.materialId,
-          payAmount: values.payAmount,
-          cashBankTransactionDetails: entries.map((items) => {
-            const { key, ...newItems } = items; //hapus objek
-            return { ...newItems, unitId: values.unit };
-          }),
-        };
-        setLoading(true);
-        await TransactionOutAxios.updateTransaction(id, payload as any);
-        showNotification('success', 'Berhasil', 'Berhasil Edit Data');
-        setTimeout(() => {
-          navigate('/transaction-out-raw-material');
-        }, 2000);
-        setLoading(false);
-        form.resetFields();
-      } else {
-        showNotification('warning', 'Perhatian', 'ID tidak di temukan');
-      }
-    } catch (e) {
-      setLoading(false);
-      showNotification('error', 'Gagal', 'Gagal Edit Data');
-    }
-  };
-
-  const inputDate = Form.useWatch('date', form);
   useEffect(() => {
-    fetchAccount();
-  }, []);
+    void fetchAccount();
+    void loadTransaction();
+  }, [id]);
 
   const fetchAccount = async () => {
-    const data = await AccountAxios.fetchDataAccount({
-      accountTypeName: 'EXPENSE',
-      page: 1,
-      limit: 100,
-    });
-    setDataAccount(data?.data?.data?.data);
+    try {
+      const response = await AccountAxios.fetchDataAccount({
+        accountTypeName: 'EXPENSE',
+        page: 1,
+        limit: 100,
+      });
+
+      setDataAccount(response?.data?.data?.data || []);
+    } catch {
+      showNotification('error', 'Gagal', 'Gagal mengambil daftar akun');
+    }
   };
 
-  const handleRowDoubleClickAccountnUmber = async (
-    record: TransactionOutInterfaces.ResponseBankType
-  ) => {
-    generateCodeVoucher(inputDate);
-    setOpenAccountNumber((open) => !open);
+  const loadTransaction = async () => {
+    if (!id) {
+      showNotification('warning', 'Perhatian', 'ID transaksi tidak ditemukan');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await TransactionOutAxiosMaterial.fetchDataTransactionById(id);
+
+      if (!data) {
+        showNotification('error', 'Gagal', 'Data transaksi tidak ditemukan');
+        return;
+      }
+
+      // Mode transaksi ditentukan dari data asli.
+      // Mode tidak boleh berubah selama proses UPDATE.
+      const loadedMaterialId = data.materialId ? String(data.materialId) : null;
+
+      setOriginalMaterialId(loadedMaterialId);
+      setIsManual(!loadedMaterialId);
+
+      const details: JournalEntry[] = (data.cashBankTransactionDetails || []).map(
+        (item: any, index: number) => ({
+          key: `${item.id || 'detail'}-${index}`,
+          accountCode: item.accountCode ?? null,
+          keterangan: item.keterangan || '',
+          accountName: item.accountName || '',
+          credit: toNumber(item.credit),
+          debit: toNumber(item.debit),
+        })
+      );
+
+      setEntries(details);
+
+      // Batas pembayaran UPDATE:
+      // total tagihan - (akumulasi pembayaran - debit transaksi yang sedang diedit)
+      const currentTransactionDebit = toNumber(details[0]?.debit);
+      const accumulatedPayment = toNumber(data.downPayment);
+      const grossAmount = toNumber(data.grossAmount);
+
+      const maxPayment = Math.max(0, grossAmount - (accumulatedPayment - currentTransactionDebit));
+
+      setMaxMaterialPayment(maxPayment);
+
+      form.setFieldsValue({
+        transactionNumber: data.transactionNumber || '',
+        date: data.date ? dayjs(data.date).format('YYYY-MM-DD') : '',
+        description: data.description || '',
+        unit: data.unitId || '',
+        amount: toNumber(data.grossAmount),
+        payAmount: toNumber(data.amountInIDR),
+        accountCode: data.accountCode || undefined,
+        accounIdTax: data.accounIdTax || undefined,
+        taxType: data.taxType,
+        taxValue: data.taxValue ?? undefined,
+        bank_account_id: data.bank_account_id || '',
+        to: data.to || '',
+        address: data.address || '',
+        materialId: loadedMaterialId || undefined,
+      });
+
+      // Field tampilan rekening, bukan bagian dari TransactionOutType
+      form.setFieldValue('namaAkun' as any, data.bank_account?.bankName || '');
+    } catch {
+      showNotification('error', 'Gagal', 'Gagal mengambil data transaksi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRowDoubleClickBank = async (record: { id: string; bankName: string }) => {
     form.setFieldsValue({
       namaAkun: record.bankName,
       bank_account_id: record.id,
     });
+    setOpenAccountNumber(false);
   };
 
-  const handleRowDoubleClickRawMaterial = async (record: any) => {
-    try {
-      const paymentTotal = record?.items?.reduce((curr: any, acc: any) => acc.Total + curr, 0);
-      setEntries([
-        {
-          key: Date.now().toString(),
-          accountCode: record.supplier.accountCode,
-          keterangan: record.supplier?.account?.name,
-          debit: paymentTotal - Number(record.downPayment || 0),
-          credit: 0,
-          accountName: record.supplier?.account?.name || '-',
-        },
-      ]);
-
-      form.setFieldsValue({
-        amount: paymentTotal - Number(record.downPayment || 0),
-        unit: record.unitId,
-        accountCode: record.supplier.accountCode,
-        address: record.supplier.alamatRekanan,
-        to: record.supplier.namaRekanan,
-        materialId: record.id,
-        payAmount: paymentTotal - Number(record.downPayment || 0),
-      });
-      setOpenKategori(false);
-    } catch (e) {
-      showNotification('error', 'Error', 'Terjadi Kesalahan');
-    }
-  };
-
-  const generateCodeVoucher = async (date: Date) => {
-    const query: MasterAkunBankInterfaces.ParamsBankAccountTypeGenCode = {
-      tanggal: date,
-    };
-    const data = await MasterAkunBankAxios.fetchGenCodeAkunBankPay(query);
-    form.setFieldValue('transactionNumber', data.data);
-  };
-
-  type TaxType = {
+  const handleTaxDoubleClick = (record: {
     taxType: string;
     taxValue: number | null;
     accountCode: string;
-  };
-
-  const onDoubleClick = (record: TaxType) => {
+  }) => {
     form.setFieldsValue({
       taxType: record.taxType,
-      taxValue: record.taxValue,
+      taxValue: record.taxValue ?? undefined,
       accounIdTax: record.accountCode,
     });
 
-    setOpen(false);
+    setOpenTax(false);
   };
 
-  useEffect(() => {
-    TransactionAxiosUse();
-  }, []);
-
-  const [openAccountDetails, setOpenAccountDetails] = useState<boolean>(false);
-
-  const [selectedRecord, setSelectedRecord] = useState<JournalEntry | null>(null);
   const addRow = () => {
-    setEntries([
-      ...entries,
+    setEntries((prev) => [
+      ...prev,
       {
-        key: Date.now().toString(),
+        key: `${Date.now()}-${Math.random()}`,
         accountCode: null,
         keterangan: '',
         debit: 0,
@@ -232,36 +236,64 @@ export default function TransactionOutUpdateRawMaterial() {
   };
 
   const removeRow = (key: string) => {
-    setEntries(entries.filter((entry) => entry.key !== key));
+    if (isManual === false && entries[0]?.key === key) {
+      showNotification(
+        'warning',
+        'Perhatian',
+        'Baris pertama pembayaran material tidak boleh dihapus.'
+      );
+      return;
+    }
+
+    setEntries((prev) => prev.filter((entry) => entry.key !== key));
   };
 
-  const handleChange = (key: string, field: keyof JournalEntry, value: any) => {
+  const handleChange = (key: string, field: keyof JournalEntry, value: unknown) => {
     setEntries((prev) =>
-      prev.map((entry) => (entry.key === key ? { ...entry, [field]: value } : entry))
+      prev.map((entry) =>
+        entry.key === key
+          ? {
+              ...entry,
+              [field]: field === 'debit' || field === 'credit' ? toNumber(value) : value,
+            }
+          : entry
+      )
     );
+  };
+
+  const handleSelectAccount = (recordRow: any, selected: JournalEntry) => {
+    setEntries((prev) =>
+      prev.map((entry) =>
+        entry.key === selected.key
+          ? {
+              ...entry,
+              accountCode: recordRow.code,
+              accountName: recordRow.name,
+              keterangan: recordRow.name,
+            }
+          : entry
+      )
+    );
+
+    setOpenAccountDetails(false);
   };
 
   const columns = [
     {
       title: 'Akun (COA)',
       dataIndex: 'coa',
-      render: (_: any, record: JournalEntry) => (
-        <div
-          style={{
-            display: 'flex',
-            gap: 5,
-            width: 'auto',
-            minWidth: 300,
-          }}
-        >
+      render: (_: unknown, record: JournalEntry) => (
+        <div style={{ display: 'flex', gap: 5, width: 'auto', minWidth: 300 }}>
           <Input
-            value={`${entries.find((i) => i.key === record.key)?.accountCode || ''} - ${entries.find((i) => i.key === record.key)?.accountName}`}
+            value={`${record.accountCode || ''}${
+              record.accountName ? ` - ${record.accountName}` : ''
+            }`}
             disabled
             prefix={<TagChevron size={16} />}
             placeholder="Nama Akun"
           />
 
-          <Tooltip title="Search akun">
+          <Tooltip title="Cari akun">
             <Button
               type="primary"
               shape="circle"
@@ -278,32 +310,35 @@ export default function TransactionOutUpdateRawMaterial() {
     {
       title: 'Keterangan',
       dataIndex: 'keterangan',
-      render: (_: any, record: JournalEntry) => (
+      render: (_: unknown, record: JournalEntry) => (
         <Input
-          onChange={(val) => {
-            handleChange(record.key, 'keterangan', val.target.value);
-          }}
           value={record.keterangan}
+          onChange={(event) => handleChange(record.key, 'keterangan', event.target.value)}
           prefix={<BookOutlined size={16} />}
           placeholder="Keterangan"
         />
       ),
     },
-
     {
       title: 'Debit',
       dataIndex: 'debit',
-      render: (_: any, record: JournalEntry) => (
+      render: (_: unknown, record: JournalEntry) => (
         <InputNumber
           controls={false}
           min={0}
+          max={
+            isManual === false && record.key === entries[0]?.key ? maxMaterialPayment : undefined
+          }
           style={{ width: 200 }}
           value={record.debit}
           formatter={globalHelpers.formatNumber2Digits}
           parser={globalHelpers.parseNumber2Digits}
-          onChange={(val) => {
-            handleChange(record.key, 'debit', val || 0);
-            if (val) handleChange(record.key, 'credit', 0); // only one side filled
+          onChange={(value) => {
+            handleChange(record.key, 'debit', value);
+
+            if (toNumber(value) > 0) {
+              handleChange(record.key, 'credit', 0);
+            }
           }}
         />
       ),
@@ -311,128 +346,189 @@ export default function TransactionOutUpdateRawMaterial() {
     {
       title: 'Kredit',
       dataIndex: 'credit',
-      render: (_: any, record: JournalEntry) => (
+      render: (_: unknown, record: JournalEntry) => (
         <InputNumber
           controls={false}
-          style={{ width: 200 }}
           min={0}
+          style={{ width: 200 }}
           value={record.credit}
           formatter={globalHelpers.formatNumber2Digits}
           parser={globalHelpers.parseNumber2Digits}
-          onChange={(val) => {
-            handleChange(record.key, 'credit', val || 0);
-            if (val) handleChange(record.key, 'debit', 0); // only one side filled
+          onChange={(value) => {
+            handleChange(record.key, 'credit', value);
+
+            if (toNumber(value) > 0) {
+              handleChange(record.key, 'debit', 0);
+            }
           }}
         />
       ),
     },
     {
       title: '',
-      render: (_: any, record: JournalEntry) => (
+      render: (_: unknown, record: JournalEntry) => (
         <Button danger icon={<DeleteOutlined />} onClick={() => removeRow(record.key)} />
       ),
     },
   ];
 
-  const handleRowDoubleClickAccount = (recordRow: any, record: JournalEntry) => {
-    setEntries((prev) =>
-      prev.map((entry) =>
-        entry.key === record.key
-          ? {
-              ...entry,
-              ['accountCode']: recordRow.code,
-              ['accountName']: recordRow.name,
-              ['keterangan']: recordRow.name,
-            }
-          : entry
-      )
-    );
-    setOpenAccountDetails(false);
-  };
+  const onFinish = async (values: TransactionFormValues) => {
+    if (isManual === null) {
+      showNotification('warning', 'Perhatian', 'Data transaksi belum selesai dimuat');
+      return;
+    }
 
-  const TransactionAxiosUse = async () => {
-    try {
-      if (id) {
-        const data = await TransactionOutAxios.fetchDataTransactionById(id);
-        const detail = data?.cashBankTransactionDetails
-          // ?.filter((item: any) => item.accountCode !== data?.bank_account?.accountCode)
-          .map((item: any) => ({
-            accountCode: item.accountCode,
-            keterangan: item.keterangan,
-            accountName: item.accountName,
-            credit: Number(item.credit) || 0,
-            debit: Number(item.debit) || 0,
-            key: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-          }));
-        setEntries(detail || []);
+    if (!id) {
+      showNotification('warning', 'Perhatian', 'ID transaksi tidak ditemukan');
+      return;
+    }
 
-        form.setFieldsValue({
-          invoiceNumber: data?.invoice?.invoiceNumber,
-          inputDate: globalHelpers.dateFormat(data?.date),
-          jumlahBayar: data?.amountInIDR || 0,
-          description: data?.description || '-',
-          invoiceDate: globalHelpers.dateFormat(data?.invoice?.invoiceDate),
-          transactionNumber: data?.transactionNumber || '-',
-          nomorAkun: data?.bank_account?.bankAccountNumber || '-',
-          unit: data.unitId,
-          amount: Number(data?.grossAmount),
-          taxType: data.taxType,
-          taxValue: data.taxValue,
-          accountCode: data.accountCode,
-          namaAkun: data?.bank_account?.bankName,
-          bank_account_id: data?.bank_account_id,
-          to: data?.to,
-          payAmount: data?.amountInIDR || 0,
-          address: data?.address || '-',
-        });
+    const paymentAmount = toNumber(values.payAmount);
+
+    if (paymentAmount <= 0) {
+      showNotification('warning', 'Perhatian', 'Jumlah pembayaran harus lebih besar dari 0');
+      return;
+    }
+
+    // Validasi khusus transaksi Raw Material.
+    if (isManual === false) {
+      const debitMaterial = toNumber(entries[0]?.debit);
+
+      if (debitMaterial <= 0) {
+        showNotification('warning', 'Perhatian', 'Pembayaran material harus lebih besar dari 0.');
+        return;
       }
-    } catch (e) {
-      showNotification('error', 'Gagal', 'Gagal get data');
+
+      if (!entries[0]?.accountCode) {
+        showNotification(
+          'warning',
+          'Perhatian',
+          'Pilih akun COA untuk pembayaran material pada baris pertama.'
+        );
+        return;
+      }
+
+      if (paymentAmount < debitMaterial) {
+        showNotification(
+          'warning',
+          'Perhatian',
+          'Total uang keluar tidak boleh lebih kecil dari pembayaran material.'
+        );
+        return;
+      }
+
+      if (debitMaterial > maxMaterialPayment) {
+        showNotification(
+          'warning',
+          'Perhatian',
+          `Pembayaran material tidak boleh melebihi batas maksimal ${globalHelpers.formatter(
+            maxMaterialPayment
+          )}.`
+        );
+        return;
+      }
+    }
+
+    if (Math.abs(totalCreditWithPayment - totalDebit) >= 0.01) {
+      showNotification('warning', 'Perhatian', 'Total Kredit dan Total Debit harus sama');
+      return;
+    }
+
+    // Material ID selalu berasal dari transaksi awal.
+    // Dengan demikian transaksi tidak bisa berpindah mode/material.
+    const payload: TransactionOutInterfaces.UpdateCashOutRawMaterialPayload = {
+      transactionNumber: values.transactionNumber,
+      amount: toNumber(values.amount),
+      description: values.description || '-',
+      bank_account_id: values.bank_account_id,
+      date: dayjs(values.date).format('YYYY-MM-DD'),
+      accountCode: values.accountCode,
+      accounIdTax: values.accounIdTax,
+      taxType: values.taxType,
+      taxValue: values.taxValue,
+      unitId: values.unit,
+      to: values.to,
+      address: values.address,
+
+      // Material ID tetap mengikuti transaksi awal.
+      // Jika transaksi awal manual, materialId tidak dikirim.
+      ...(originalMaterialId ? { materialId: originalMaterialId } : {}),
+
+      payAmount: paymentAmount,
+
+      cashBankTransactionDetails: entries.map((item) => ({
+        unitId: values.unit,
+
+        // DTO backend mewajibkan description.
+        description: item.keterangan || '-',
+
+        accountCode: item.accountCode || undefined,
+        accountName: item.accountName || '',
+        keterangan: item.keterangan || '-',
+        debit: toNumber(item.debit),
+        credit: toNumber(item.credit),
+      })),
+    };
+
+    setLoading(true);
+
+    try {
+      await TransactionOutAxiosMaterial.updateCashOutFlowRawMaterial(id, payload);
+
+      showNotification('success', 'Berhasil', 'Berhasil memperbarui transaksi');
+
+      navigate('/transaction-out-raw-material');
+    } catch {
+      showNotification('error', 'Gagal', 'Gagal memperbarui transaksi');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-      }}
-    >
-      <ModalPajak setOpen={setOpen} handleRowDoubleClick={onDoubleClick} open={open} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <ModalPajak setOpen={setOpenTax} handleRowDoubleClick={handleTaxDoubleClick} open={openTax} />
 
       <ModalNumberAccount
         open={openAccountNumber}
         setOpen={setOpenAccountNumber}
-        handleRowDoubleClick={handleRowDoubleClickAccountnUmber}
+        handleRowDoubleClick={handleRowDoubleClickBank}
       />
 
       <ModalAccount
         record={selectedRecord}
         open={openAccountDetails}
         setOpen={setOpenAccountDetails}
-        handleRowDoubleClick={handleRowDoubleClickAccount}
+        handleRowDoubleClick={handleSelectAccount}
       />
 
-      <ModalNumberAccount
-        open={openAccountNumber}
-        setOpen={setOpenAccountNumber}
-        handleRowDoubleClick={handleRowDoubleClickAccountnUmber}
-      />
-      <ModalRawMaterial
-        open={openKategori}
-        setOpen={setOpenKategori}
-        handleRowDoubleClick={handleRowDoubleClickRawMaterial}
-      />
       <Card
-        title={<TitleCardAdd title="Buat Transaksi" />}
+        title={
+          <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
+            <TitleCardAdd title="Edit Transaksi Kas Keluar Material" />
+
+            <Checkbox
+              checked={isManual === true}
+              disabled
+              style={{
+                marginInlineEnd: 0,
+                fontWeight: 500,
+                padding: '7px 14px',
+                background: isManual === true ? '#e6f4ff' : '#f5f5f5',
+                border: `1px solid ${isManual === true ? '#91caff' : '#d9d9d9'}`,
+                borderRadius: 8,
+              }}
+            >
+              Penerimaan Tahun Sebelumnya (Manual)
+            </Checkbox>
+          </Flex>
+        }
         style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
       >
         <Form
           layout="vertical"
           form={form}
-          name="login"
-          initialValues={{ remember: true }}
+          name="update-cash-out-raw-material"
           style={{
             maxWidth: '100%',
             display: 'flex',
@@ -443,90 +539,64 @@ export default function TransactionOutUpdateRawMaterial() {
         >
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item
-                label="materialId"
-                style={{ flex: 1, width: '100%', display: 'none' }}
-                name="materialId"
-                rules={[{ required: false }]}
-              >
-                <Input
-                  disabled
-                  style={{ width: '100%' }}
-                  prefix={<FilePdf size={16} />}
-                  placeholder="Nilai materialId"
-                />
+              <Form.Item name="materialId" hidden>
+                <Input disabled />
+              </Form.Item>
+
+              <Form.Item name="accounIdTax" hidden>
+                <Input disabled />
               </Form.Item>
 
               <Form.Item
-                label="accounIdTax"
-                style={{ flex: 1, width: '100%', display: 'none' }}
-                name="accounIdTax"
-                rules={[{ required: false }]}
-              >
-                <Input
-                  disabled
-                  style={{ width: '100%' }}
-                  prefix={<FilePdf size={16} />}
-                  placeholder="Nilai accounIdTax"
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="bankAccountId"
-                style={{ flex: 1, width: '100%', display: 'none' }}
                 name="bank_account_id"
-                rules={[{ required: true, message: 'Masukan nilai bankAccountId!' }]}
+                hidden
+                rules={[
+                  {
+                    required: true,
+                    message: 'Pilih rekening bank',
+                  },
+                ]}
               >
-                <Input
-                  disabled
-                  style={{ width: '100%' }}
-                  prefix={<FilePdf size={16} />}
-                  placeholder="Nilai bankAccountId"
-                />
+                <Input disabled />
               </Form.Item>
 
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
+              {isManual === false && (
                 <Form.Item
-                  label="kategori"
-                  style={{ flex: 1, width: '100%' }}
+                  label="Kategori"
                   name="accountCode"
-                  rules={[{ required: true, message: 'Masukan nilai kategori!' }]}
+                  rules={[
+                    {
+                      required: true,
+                      message: 'Kategori tidak ditemukan pada transaksi',
+                    },
+                  ]}
                 >
                   <Select
-                    style={{ width: '100%' }}
                     disabled
                     prefix={<TagChevron size={16} />}
-                    placeholder="Kategori"
-                    options={dataAccount.map((item) => ({ value: item.id, label: item.name }))}
+                    placeholder="Kategori material"
+                    options={dataAccount.map((item) => ({
+                      value: item.id,
+                      label: item.name,
+                    }))}
                   />
                 </Form.Item>
-                <Tooltip title="search">
-                  <Button
-                    type="primary"
-                    // onClick={() => setOpenKategori(true)}
-                    shape="circle"
-                    icon={<SearchOutlined />}
-                  />
-                </Tooltip>
-              </div>
+              )}
 
               <Form.Item
                 label="Nomor Transaksi"
-                style={{ flex: 1, width: '100%' }}
                 name="transactionNumber"
                 rules={[
-                  { required: true, message: 'Masukan nilai Nomor Transaksi!' },
+                  {
+                    required: true,
+                    message: 'Masukkan nomor transaksi',
+                  },
                   {
                     validator: (_, value) => {
                       if (!value || isValidCode(value)) {
                         return Promise.resolve();
                       }
+
                       return Promise.reject(
                         new Error(
                           'Format harus: code/nomor urut/bulan/tahun (contoh: BMI04/VI/2026)'
@@ -536,141 +606,165 @@ export default function TransactionOutUpdateRawMaterial() {
                   },
                 ]}
               >
-                <Input
-                  style={{ width: '100%' }}
-                  prefix={<TagChevron size={16} />}
-                  placeholder="Nilai Nomor Transaksi"
-                />
+                <Input prefix={<TagChevron size={16} />} placeholder="Nomor Transaksi" />
               </Form.Item>
 
               <Form.Item
                 label="Tanggal Keluar"
                 name="date"
-                initialValue={dayjs()} // default ke hari ini
-                rules={[{ required: true, message: 'Masukan Tanggal Keluar' }]}
-                getValueFromEvent={(date) => {
-                  // simpan ke form dalam format string tanpa timezone
-                  return date ? date.format('YYYY-MM-DD') : null;
-                }}
-                getValueProps={(value) => {
-                  // ubah dari string ke dayjs agar tampil di DatePicker
-                  return {
-                    value: value ? dayjs(value, 'YYYY-MM-DD') : undefined,
-                  };
-                }}
+                rules={[
+                  {
+                    required: true,
+                    message: 'Masukkan tanggal keluar',
+                  },
+                ]}
+                getValueFromEvent={(date) => (date ? date.format('YYYY-MM-DD') : null)}
+                getValueProps={(value) => ({
+                  value: value ? dayjs(value, 'YYYY-MM-DD') : undefined,
+                })}
               >
                 <DatePicker
-                  prefix={<CalendarMinus />}
                   style={{ width: '100%' }}
-                  placeholder="Tanggal Keluar"
-                  format={'YYYY-MM-DD'}
+                  prefix={<CalendarMinus />}
+                  format="YYYY-MM-DD"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Jumlah Transaksi"
+                name="amount"
+                rules={[
+                  {
+                    required: true,
+                    message: 'Masukkan jumlah transaksi',
+                  },
+                ]}
+                extra={<TextTerbilang form={form} properti="amount" />}
+              >
+                <InputNumber
+                  controls={false}
+                  disabled={isManual !== true}
+                  formatter={globalHelpers.formatter}
+                  parser={globalHelpers.parser}
+                  style={{ width: '100%' }}
+                  prefix={<span>Rp</span>}
+                  placeholder="Jumlah"
                 />
               </Form.Item>
 
               <Form.Item
                 label="Jumlah Pembayaran"
-                name="amount"
-                rules={[{ required: true, message: 'Masukan jumlah!' }]}
-                extra={<TextTerbilang form={form} properti="amount" />}
-              >
-                <InputNumber
-                  controls={false}
-                  disabled
-                  formatter={globalHelpers.formatter}
-                  parser={globalHelpers.parser}
-                  style={{ width: '100%' }}
-                  prefix={<span>Rp</span>}
-                  placeholder="Jumlah"
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="Total"
                 name="payAmount"
-                rules={[{ required: true, message: 'Masukan jumlah!' }]}
+                rules={[
+                  {
+                    required: true,
+                    message: 'Masukkan jumlah pembayaran',
+                  },
+                  {
+                    validator: (_, value) =>
+                      toNumber(value) > 0
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('Jumlah pembayaran harus lebih besar dari 0')),
+                  },
+                ]}
                 extra={<TextTerbilang form={form} properti="payAmount" />}
               >
                 <InputNumber
                   controls={false}
+                  min={0}
                   formatter={globalHelpers.formatter}
                   parser={globalHelpers.parser}
                   style={{ width: '100%' }}
                   prefix={<span>Rp</span>}
-                  placeholder="Jumlah"
+                  placeholder="Jumlah pembayaran"
                 />
               </Form.Item>
             </Col>
 
             <Col xs={24} sm={12}>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Form.Item
-                  label="Nama Akun"
-                  style={{ flex: 1, width: '100%' }}
+                  label="Nama Rekening"
                   name="namaAkun"
-                  rules={[{ required: true, message: 'Masukan nilai Nama Akun!' }]}
+                  style={{ flex: 1, width: '100%' }}
+                  rules={[
+                    {
+                      required: true,
+                      message: 'Pilih rekening bank',
+                    },
+                  ]}
                 >
-                  <Input
-                    disabled
-                    style={{ width: '100%' }}
-                    prefix={<TagChevron size={16} />}
-                    placeholder="Nilai nama akun"
-                  />
+                  <Input disabled prefix={<TagChevron size={16} />} placeholder="Nama rekening" />
                 </Form.Item>
-                <Tooltip title="search">
+
+                <Tooltip title="Pilih rekening bank">
                   <Button
                     type="primary"
-                    onClick={() => setOpenAccountNumber(true)}
                     shape="circle"
                     icon={<SearchOutlined />}
+                    onClick={() => setOpenAccountNumber(true)}
                   />
                 </Tooltip>
               </div>
 
               <Form.Item
-                label="Tujuan Transaksi"
-                style={{ flex: 1, width: '100%' }}
+                label="Penerima"
                 name="to"
-                rules={[{ required: true, message: 'Masukan Tujuan Transaksi!' }]}
+                rules={
+                  isManual
+                    ? [
+                        {
+                          required: true,
+                          message: 'Masukkan penerima',
+                        },
+                      ]
+                    : []
+                }
               >
                 <Input
-                  disabled
-                  style={{ width: '100%' }}
+                  disabled={isManual !== true}
                   prefix={<TagChevron size={16} />}
-                  placeholder="Tujuan Transaksi"
+                  placeholder="Penerima"
                 />
               </Form.Item>
 
               <Form.Item
                 label="Alamat Penerima"
-                style={{ flex: 1, width: '100%' }}
                 name="address"
-                rules={[{ required: true, message: 'Masukan Alamat Penerima' }]}
+                rules={
+                  isManual
+                    ? [
+                        {
+                          required: true,
+                          message: 'Masukkan alamat penerima',
+                        },
+                      ]
+                    : []
+                }
               >
                 <Input
-                  disabled
-                  style={{ width: '100%' }}
+                  disabled={isManual !== true}
                   prefix={<MapPin size={16} />}
-                  placeholder="Alamat Penerima"
+                  placeholder="Alamat penerima"
                 />
               </Form.Item>
 
-              <Form.Item label="Catatan" style={{ flex: 1, width: '100%' }} name="description">
-                <TextArea rows={2} placeholder="Masukan Catatan" />
+              <Form.Item label="Catatan" name="description">
+                <TextArea rows={2} placeholder="Masukkan catatan" />
               </Form.Item>
 
               <Form.Item
                 label="Unit"
                 name="unit"
-                rules={[{ required: true, message: 'Masukan unit' }]}
+                rules={[
+                  {
+                    required: true,
+                    message: 'Pilih unit',
+                  },
+                ]}
               >
                 <Select
-                  disabled
+                  disabled={isManual !== true}
                   prefix={<Unite />}
                   showSearch
                   loading={unit.loading}
@@ -691,7 +785,12 @@ export default function TransactionOutUpdateRawMaterial() {
             scroll={{ x: 'max-content' }}
             rowKey="key"
             footer={() => (
-              <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+              <Space
+                style={{
+                  justifyContent: 'space-between',
+                  width: '100%',
+                }}
+              >
                 <Button type="dashed" icon={<PlusOutlined />} onClick={addRow}>
                   Tambah Baris
                 </Button>
@@ -699,18 +798,18 @@ export default function TransactionOutUpdateRawMaterial() {
                 <div
                   style={{
                     display: 'flex',
-                    gap: 50,
+                    gap: 32,
+                    flexWrap: 'wrap',
                   }}
                 >
                   <div>
                     <b>Total Debit: </b>
                     <span>{globalHelpers.formatter(totalDebit)}</span>
                   </div>
+
                   <div>
-                    <b>Total Credit: </b>
-                    <span>
-                      {globalHelpers.formatter(totalCredit + form.getFieldValue('payAmount') || 0)}
-                    </span>
+                    <b>Total Kredit </b>
+                    <span>{globalHelpers.formatter(totalCreditWithPayment)}</span>
                   </div>
                 </div>
               </Space>
@@ -719,7 +818,7 @@ export default function TransactionOutUpdateRawMaterial() {
 
           <Flex gap="small">
             <Buttonback loading={loading} />
-            <ButtonAdd loading={loading} />
+            <ButtonAdd loading={loading || isManual === null} />
           </Flex>
         </Form>
       </Card>

@@ -332,9 +332,7 @@ export class PurchaseOrderTaxService {
 				},
 			});
 			if (existingTaxes.length > 0) {
-				throw new ConflictException(
-					`Pajak ${existingTaxes.map((tax) => tax.taxType).join(', ')} sudah ada pada pesanan ini.`,
-				);
+				throw new ConflictException(`Pajak ${existingTaxes.map((tax) => tax.taxType).join(', ')} sudah ada pada pesanan ini.`);
 			}
 
 			return tx.purchaseOrderTax.createMany({

@@ -737,7 +737,13 @@ export default function OrderRNUpdate() {
                 render: (_: any, record: any) => (
                   <Button
                     danger
-                    onClick={() => setDataSourcePajak((previous) => previous.filter((tax) => (tax.taxId || tax.id) !== (record.taxId || record.id)))}
+                    onClick={() =>
+                      setDataSourcePajak((previous) =>
+                        previous.filter(
+                          (tax) => (tax.taxId || tax.id) !== (record.taxId || record.id)
+                        )
+                      )
+                    }
                   >
                     Hapus
                   </Button>

@@ -107,6 +107,8 @@ export default function TransactionDollarAdd() {
         jumlahBayar: values?.jumlahBayar,
         amountOriginal: values.amountOriginal,
         description: values?.description || '-',
+       receivedFrom: values?.receivedFrom || null,
+purpose: values?.purpose || null,
         invoiceId: isManual ? null : values?.invoiceId,
         bank_account_id: values?.bankAccountId,
         date: handleDate(values?.inputDate),
@@ -792,6 +794,22 @@ export default function TransactionDollarAdd() {
                   placeholder="Jumlah"
                 />
               </Form.Item>
+
+              <Form.Item
+  label="Diterima Dari"
+  name="receivedFrom"
+  style={{ flex: 1, width: '100%' }}
+>
+  <Input placeholder="Masukan nama pengirim / sumber penerimaan" />
+</Form.Item>
+
+<Form.Item
+  label="Untuk"
+  name="purpose"
+  style={{ flex: 1, width: '100%' }}
+>
+  <TextArea rows={2} placeholder="Masukan tujuan penerimaan uang" />
+</Form.Item>
 
               <Form.Item label="Catatan" style={{ flex: 1, width: '100%' }} name="description">
                 <TextArea rows={2} placeholder="Masukan Catatan" />

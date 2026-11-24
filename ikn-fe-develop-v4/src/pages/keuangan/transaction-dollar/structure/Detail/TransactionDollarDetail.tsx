@@ -46,7 +46,7 @@ type JournalEntry = {
 export default function TransactionDollarDetail() {
   const { id } = useParams();
   const [form] = Form.useForm();
-  const [dataAll, setDataAll] = useState([]);
+  const [dataAll, setDataAll] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [datePrint, setDatePrint] = useState<Dayjs | null>(null);
   const [other, setOther] = useState<TransactionOutInterfaces.CashBankTransactionDetails[] | []>(
@@ -295,6 +295,12 @@ export default function TransactionDollarDetail() {
             <Descriptions.Item label="Tanggal Invoice">
               {dayjs(form.getFieldValue('invoiceDate')).format('DD/MM/YYYY')}
             </Descriptions.Item>
+
+            <Descriptions.Item label="Diterima Dari">
+              {dataAll?.receivedFrom || '-'}
+            </Descriptions.Item>
+
+            <Descriptions.Item label="Untuk">{dataAll?.purpose || '-'}</Descriptions.Item>
 
             <Descriptions.Item label="Catatan">
               {form.getFieldValue('description')}
