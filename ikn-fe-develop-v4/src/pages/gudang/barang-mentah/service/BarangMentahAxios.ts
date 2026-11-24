@@ -50,6 +50,9 @@ interface ParamsType {
   page: number;
   limit: number;
   date?: string | null;
+  documentCode?: string | null;
+  documentNo?: string | null;
+  supplier?: string | null;
   description?: string | null;
   unit?: string | null;
   periode_month?: string | null;

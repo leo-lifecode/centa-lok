@@ -1759,17 +1759,8 @@ export class TransactionService {
 	}
 
 	async findOne(id: string) {
-		// const transaction = await this.prisma.cashBankTransaction.findUnique({
-		// 	where: { id },
-		// 	select: { unitId: true },
-		// });
-
-		// if (!transaction) return null;
-
-		return await this.prisma.cashBankTransaction.findUnique({
-			where: {
-				id,
-			},
+		const transaction = await this.prisma.cashBankTransaction.findUnique({
+			where: { id },
 			include: {
 				bank_account: true,
 				journalEntry: {
@@ -1804,6 +1795,31 @@ export class TransactionService {
 				},
 			},
 		});
+
+		if (!transaction) {
+			throw new NotFoundException('Transaksi tidak ditemukan.');
+		}
+
+		// Ambil downPayment khusus transaksi Raw Material.
+		if (transaction.materialId) {
+			const receipt = await this.prisma.rawMaterialReceipt.findUnique({
+				where: {
+					id: transaction.materialId,
+				},
+				select: {
+					downPayment: true,
+					isLunas: true,
+				},
+			});
+
+			return {
+				...transaction,
+				downPayment: Number(receipt?.downPayment || 0),
+				isLunas: receipt?.isLunas || 'N',
+			};
+		}
+
+		return transaction;
 	}
 
 	// =====================================================
@@ -2611,23 +2627,9 @@ export class TransactionService {
 					});
 				}
 
-				// 4. Jika transaksi terhubung dengan Penerimaan Material,
-				// hitung ulang total pembayaran dari transaksi yang masih aktif.
+				// 4. Hitung ulang pembayaran material setelah transaksi dihapus.
 				if (existing.materialId) {
-					const dataRaw = await tx.rawMaterialReceipt.findUnique({
-						where: { id: existing.materialId },
-						include: {
-							items: {
-								where: { deletedAt: null },
-							},
-						},
-					});
-
-					if (!dataRaw) {
-						throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
-					}
-
-					// Ambil pembayaran material lain yang masih aktif.
+					// Ambil transaksi pembayaran material lain yang masih aktif.
 					const transaksiPembayaran = await tx.cashBankTransaction.findMany({
 						where: {
 							materialId: existing.materialId,
@@ -2635,20 +2637,40 @@ export class TransactionService {
 							currency: 'RP',
 							isMaterial: 'Y',
 							deletedAt: null,
-							id: { not: id },
+							id: {
+								not: id,
+							},
 						},
 						select: {
-							amountInIDR: true,
+							cashBankTransactionDetails: {
+								where: {
+									deletedAt: null,
+								},
+								orderBy: {
+									createdAt: 'asc',
+								},
+								take: 1,
+								select: {
+									debit: true,
+								},
+							},
 						},
 					});
 
-					// Hitung ulang pembayaran setelah transaksi ini dihapus.
-					const totalPembayaran = transaksiPembayaran.reduce((total, transaksi) => total + Number(transaksi.amountInIDR || 0), 0);
+					// Akumulasi hanya debit baris pertama (pembayaran material).
+					const totalPembayaran = transaksiPembayaran.reduce(
+						(total, transaksi) => total + Number(transaksi.cashBankTransactionDetails[0]?.debit || 0),
+						0,
+					);
 
-					const totalTagihan = dataRaw.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+					// grossAmount mengikuti create: total tagihan material.
+					const totalTagihan = Number(existing.grossAmount || 0);
 
+					// Perbarui akumulasi pembayaran dan status pelunasan.
 					await tx.rawMaterialReceipt.update({
-						where: { id: existing.materialId },
+						where: {
+							id: existing.materialId,
+						},
 						data: {
 							downPayment: totalPembayaran,
 							isLunas: totalPembayaran >= totalTagihan ? 'Y' : 'N',
@@ -2965,33 +2987,78 @@ export class TransactionService {
 					throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
 				}
 
-				// Hitung total tagihan penerimaan material.
+				// Hitung total tagihan penerimaan material dari RawMaterialReceiptItem.
 				const totalTagihan = dataRaw.items.reduce((total, item) => total + Number(item.Total || 0), 0);
 
-				// Hitung pembayaran sebelumnya dan pembayaran sekarang.
-				const pembayaranSebelumnya = Number(dataRaw.downPayment || 0);
-				const pembayaranSekarang = Number(createTransactionDto.payAmount || 0);
+				if (totalTagihan <= 0) {
+					throw new BadRequestException('Jumlah transaksi tidak valid.');
+				}
 
-				const sisaTagihan = totalTagihan - pembayaranSebelumnya;
+				// Ambil detail transaksi dari frontend.
+				const detailTransaksi = createTransactionDto.cashBankTransactionDetails || [];
 
-				// Validasi pembayaran.
-				if (pembayaranSekarang <= 0) {
+				// Ambil debit baris pertama sebagai pembayaran material.
+				const debitBarisPertama = Number(detailTransaksi[0]?.debit || 0);
+
+				// Ambil detail jurnal yang memiliki COA.
+				const cashBankTransactionDetails = detailTransaksi.filter((item) => Boolean(item.accountCode));
+
+				// Ambil seluruh transaksi pembayaran material yang masih aktif.
+				const transaksiPembayaran = await tx.cashBankTransaction.findMany({
+					where: {
+						materialId: createTransactionDto.materialId,
+						type: 'CASH_OUT',
+						currency: 'RP',
+						isMaterial: 'Y',
+						deletedAt: null,
+					},
+					include: {
+						cashBankTransactionDetails: {
+							where: {
+								deletedAt: null,
+							},
+							orderBy: {
+								createdAt: 'asc',
+							},
+						},
+					},
+				});
+
+				// Hitung akumulasi pembayaran sebelumnya dari debit baris pertama.
+				const pembayaranSebelumnya = transaksiPembayaran.reduce(
+					(total, transaksi) => total + Number(transaksi.cashBankTransactionDetails[0]?.debit || 0),
+					0,
+				);
+
+				// Total uang kas keluar.
+				const pembayaranSekarang = Number(createTransactionDto.payAmount);
+
+				if (!Number.isFinite(pembayaranSekarang) || pembayaranSekarang <= 0) {
 					throw new BadRequestException('Jumlah pembayaran harus lebih dari 0.');
 				}
 
-				if (pembayaranSekarang > sisaTagihan) {
-					throw new BadRequestException(`Pembayaran melebihi sisa tagihan. Sisa tagihan: ${sisaTagihan}`);
+				// Validasi debit baris pertama.
+				if (!Number.isFinite(debitBarisPertama) || debitBarisPertama <= 0) {
+					throw new BadRequestException('Debit pembayaran material harus lebih dari 0.');
 				}
 
-				// Hitung total pembayaran setelah transaksi ini.
-				const totalPembayaran = pembayaranSebelumnya + pembayaranSekarang;
+				// Pastikan total uang keluar bank tidak lebih kecil dari pembayaran material.
+				if (pembayaranSekarang < debitBarisPertama) {
+					throw new BadRequestException('Total pembayaran tidak boleh lebih kecil dari debit pembayaran material.');
+				}
+
+				// Hitung akumulasi pembayaran material.
+				const totalPembayaran = pembayaranSebelumnya + debitBarisPertama;
+
+				// Hitung sisa pembayaran material.
+				const sisaTagihan = totalTagihan - pembayaranSebelumnya;
+
+				// Tolak jika pembayaran melebihi nilai material.
+				if (totalPembayaran > totalTagihan) {
+					throw new BadRequestException(`Pembayaran melebihi nilai material. Sisa pembayaran: ${sisaTagihan}`);
+				}
 
 				const isLunas = totalPembayaran >= totalTagihan;
-
-				// Ambil detail jurnal yang memiliki COA.
-				const cashBankTransactionDetails = (createTransactionDto.cashBankTransactionDetails || []).filter((item) =>
-					Boolean(item.accountCode),
-				);
 
 				// Buat nomor jurnal setelah validasi pembayaran berhasil.
 				const numberJurnal = await this.createJournal();
@@ -3030,7 +3097,7 @@ export class TransactionService {
 						currency: 'RP',
 						unitId: createTransactionDto.unitId,
 						date: createTransactionDto.date,
-						grossAmount: pembayaranSekarang,
+						grossAmount: totalTagihan,
 						type: 'CASH_OUT',
 						isMaterial: 'Y',
 						description: createTransactionDto.description,
@@ -3906,11 +3973,13 @@ export class TransactionService {
 					throw new NotFoundException('Bank account tidak ditemukan.');
 				}
 
-				const details = (dto.cashBankTransactionDetails || []).filter((item) => Boolean(item.accountCode));
+				const detailTransaksi = dto.cashBankTransactionDetails || [];
+				const debitBarisPertama = Number(detailTransaksi[0]?.debit || 0);
+
+				const details = detailTransaksi.filter((item) => Boolean(item.accountCode));
+				let totalTagihanMaterial = Number(existing.grossAmount || 0);
 
 				// Mode Raw Material: hitung ulang pembayaran tanpa transaksi yang sedang diedit.
-				let receiptTotalPayment = 0;
-
 				if (isMaterialMode) {
 					const receipt = await tx.rawMaterialReceipt.findFirst({
 						where: {
@@ -3928,8 +3997,26 @@ export class TransactionService {
 						throw new NotFoundException('Data penerimaan barang mentah tidak ditemukan.');
 					}
 
-					const totalTagihan = receipt.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+					// Debit baris pertama adalah pembayaran material, bukan total uang keluar.
+					if (!Number.isFinite(debitBarisPertama) || debitBarisPertama <= 0) {
+						throw new BadRequestException('Pembayaran material harus lebih dari 0.');
+					}
 
+					if (payAmount < debitBarisPertama) {
+						throw new BadRequestException('Total pembayaran tidak boleh lebih kecil dari pembayaran material.');
+					}
+
+					// Total tagihan material.
+					totalTagihanMaterial = receipt.items.reduce((total, item) => total + Number(item.Total || 0), 0);
+
+					const totalTagihan = totalTagihanMaterial;
+
+					if (totalTagihan <= 0) {
+						throw new BadRequestException('Total tagihan material tidak valid.');
+					}
+
+					// Ambil transaksi pembayaran material lainnya,
+					// kecuali transaksi yang sedang diedit.
 					const otherPayments = await tx.cashBankTransaction.findMany({
 						where: {
 							id: { not: id },
@@ -3940,25 +4027,39 @@ export class TransactionService {
 							deletedAt: null,
 						},
 						select: {
-							amountInIDR: true,
+							cashBankTransactionDetails: {
+								where: { deletedAt: null },
+								orderBy: { createdAt: 'asc' },
+								take: 1,
+								select: { debit: true },
+							},
 						},
 					});
 
-					const previousPayment = otherPayments.reduce((total, transaction) => total + Number(transaction.amountInIDR || 0), 0);
+					// Hitung pembayaran material dari debit baris pertama.
+					const previousPayment = otherPayments.reduce(
+						(total, transaction) => total + Number(transaction.cashBankTransactionDetails[0]?.debit || 0),
+						0,
+					);
 
-					receiptTotalPayment = previousPayment + payAmount;
+					// Pembayaran material setelah transaksi di-update.
+					const receiptTotalPayment = previousPayment + debitBarisPertama;
 
 					if (receiptTotalPayment > totalTagihan) {
-						throw new BadRequestException(
-							`Pembayaran melebihi sisa tagihan. Sisa tagihan: ${Math.max(totalTagihan - previousPayment, 0)}`,
-						);
+						const remainingPayment = Math.max(0, totalTagihan - previousPayment);
+
+						throw new BadRequestException(`Pembayaran material melebihi sisa tagihan. Sisa tagihan: ${remainingPayment}.`);
 					}
 
+					const isLunas = receiptTotalPayment >= totalTagihan ? 'Y' : 'N';
+
 					await tx.rawMaterialReceipt.update({
-						where: { id: existing.materialId },
+						where: {
+							id: existing.materialId,
+						},
 						data: {
 							downPayment: receiptTotalPayment,
-							isLunas: receiptTotalPayment >= totalTagihan ? 'Y' : 'N',
+							isLunas,
 						},
 					});
 				}
@@ -4019,7 +4120,7 @@ export class TransactionService {
 						transactionNumber: dto.transactionNumber,
 						amountInIDR: payAmount,
 						amountOriginal: payAmount,
-						grossAmount: payAmount,
+						grossAmount: isMaterialMode ? totalTagihanMaterial : payAmount,
 						currency: 'RP',
 						type: 'CASH_OUT',
 						isMaterial: 'Y',
@@ -4120,7 +4221,7 @@ export class TransactionService {
 			},
 			{
 				maxWait: 10000,
-				timeout: 15000,
+				timeout: 30000,
 			},
 		);
 	}

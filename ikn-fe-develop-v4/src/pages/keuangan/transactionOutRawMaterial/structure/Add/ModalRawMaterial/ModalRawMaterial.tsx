@@ -31,7 +31,7 @@ interface DataType {
   date: string;
   documentCode: string;
   supplier: string;
-  documentNumber: string;
+  documentNo: string;
   quantity: number;
 }
 type DataIndex = keyof DataType;
@@ -133,6 +133,9 @@ export default function ModalRawMaterial({
     limit: 5,
     loading: false,
     date: null,
+    documentCode: null,
+    documentNo: null,
+    supplier: null,
     value_rkap: null,
     total: 0,
     periode_month: null,
@@ -155,6 +158,9 @@ export default function ModalRawMaterial({
   }, [
     dataTable.page,
     dataTable.date,
+    dataTable.documentCode,
+    dataTable.documentNo,
+    dataTable.supplier,
     dataTable.value_rkap,
     dataTable.periode_month,
     dataTable.status,
@@ -270,7 +276,7 @@ export default function ModalRawMaterial({
       dataIndex: 'documentNo',
       width: 200,
       align: 'center',
-      ...getColumnSearchProps('documentNumber'),
+      ...getColumnSearchProps('documentNo'),
     },
     {
       title: 'Tanggal Penerimaan',

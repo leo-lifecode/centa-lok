@@ -13,6 +13,7 @@ import {
   Select,
   Table,
   Space,
+  Checkbox,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import * as TransactionOutAxiosMaterial from '@pages/keuangan/transactionOutRawMaterial/service/TransactionOutAxios';
@@ -60,7 +61,35 @@ export default function TransactionOutAddRawMaterial() {
   const [dataAccount, setDataAccount] = useState<AccountInterfaces.AccountType[]>([]);
   const [open, setOpen] = useState<boolean>(false);
   const [openKategori, setOpenKategori] = useState<boolean>(false);
+  const [isManual, setIsManual] = useState<boolean>(false);
   const { open: openModal, config, showModal, handleConfirm, handleCancel } = useDynamicModal();
+
+  const handleManualChange = (checked: boolean) => {
+    setIsManual(checked);
+
+    // Bersihkan data material ketika berpindah mode
+    form.setFieldsValue({
+      materialId: undefined,
+      accountCode: undefined,
+      amount: undefined,
+      payAmount: undefined,
+      to: undefined,
+      address: undefined,
+      unit: undefined,
+    });
+
+    // Reset jurnal agar tidak membawa akun dari material sebelumnya
+    setEntries([
+      {
+        key: Date.now().toString(),
+        accountCode: null,
+        keterangan: '',
+        debit: 0,
+        credit: 0,
+        accountName: '',
+      },
+    ]);
+  };
 
   const [unit, setUnit] = useState({
     data: [],
@@ -105,13 +134,14 @@ export default function TransactionOutAddRawMaterial() {
         amount: values.amount,
         description: values?.description || '-',
         bank_account_id: values.bank_account_id,
+        BankaccountCode: values.BankaccountCode,
         date: handleDate(values?.date as Dayjs),
         accountCode: values.accountCode,
         accounIdTax: values.accounIdTax,
         unitId: values.unit,
         to: values.to,
         address: values.address,
-        materialId: values.materialId,
+        ...(!isManual && { materialId: values.materialId }),
         payAmount: values.payAmount,
         cashBankTransactionDetails: entries.map((items) => {
           const { key, ...newItems } = items;
@@ -175,32 +205,40 @@ export default function TransactionOutAddRawMaterial() {
     form.setFieldsValue({
       namaAkun: record.bankName,
       bank_account_id: record.id,
+      BankaccountCode: record.accountCode,
     });
   };
 
   const handleRowDoubleClickRawMaterial = async (record: any) => {
     try {
-      const paymentTotal = record?.items?.reduce((curr: any, acc: any) => acc.Total + curr, 0);
+      const paymentTotal = (record?.items || []).reduce(
+        (total: number, item: any) => total + Number(item.Total || 0),
+        0
+      );
+
+      const remainingPayment = Math.max(0, paymentTotal - Number(record.downPayment || 0));
+
       setEntries([
         {
           key: Date.now().toString(),
           accountCode: record.supplier.accountCode,
           keterangan: record.supplier?.account?.name,
-          debit: paymentTotal - Number(record.downPayment || 0),
+          debit: remainingPayment,
           credit: 0,
           accountName: record.supplier?.account?.name || '-',
         },
       ]);
 
       form.setFieldsValue({
-        amount: paymentTotal - Number(record.downPayment || 0),
+        amount: remainingPayment,
         unit: record.unitId,
         accountCode: record.supplier.accountCode,
         address: record.supplier.alamatRekanan,
         to: record.supplier.namaRekanan,
         materialId: record.id,
-        payAmount: paymentTotal - Number(record.downPayment || 0),
+        payAmount: remainingPayment,
       });
+
       setOpenKategori(false);
     } catch (e) {
       showNotification('error', 'Error', 'Terjadi Kesalahan');
@@ -250,7 +288,16 @@ export default function TransactionOutAddRawMaterial() {
   };
 
   const removeRow = (key: string) => {
-    setEntries(entries.filter((entry) => entry.key !== key));
+    if (!isManual && entries[0]?.key === key) {
+      showNotification(
+        'warning',
+        'Perhatian',
+        'Baris pertama pembayaran material tidak boleh dihapus!'
+      );
+      return;
+    }
+
+    setEntries((prev) => prev.filter((entry) => entry.key !== key));
   };
 
   const handleChange = (key: string, field: keyof JournalEntry, value: any) => {
@@ -315,13 +362,18 @@ export default function TransactionOutAddRawMaterial() {
         <InputNumber
           controls={false}
           min={0}
+          max={
+            !isManual && record.key === entries[0]?.key
+              ? Number(form.getFieldValue('amount') || 0)
+              : undefined
+          }
           style={{ width: 200 }}
           value={record.debit}
           formatter={globalHelpers.formatNumber2Digits}
           parser={globalHelpers.parseNumber2Digits}
           onChange={(val) => {
             handleChange(record.key, 'debit', val || 0);
-            if (val) handleChange(record.key, 'credit', 0); // only one side filled
+            if (val) handleChange(record.key, 'credit', 0);
           }}
         />
       ),
@@ -401,7 +453,26 @@ export default function TransactionOutAddRawMaterial() {
         handleRowDoubleClick={handleRowDoubleClickRawMaterial}
       />
       <Card
-        title={<TitleCardAdd title="Buat Transaksi" />}
+        title={
+          <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
+            <TitleCardAdd title="Buat Transaksi" />
+
+            <Checkbox
+              checked={isManual}
+              onChange={(e) => handleManualChange(e.target.checked)}
+              style={{
+                marginInlineEnd: 0,
+                fontWeight: 500,
+                padding: '7px 14px',
+                background: isManual ? '#e6f4ff' : '#f5f5f5',
+                border: `1px solid ${isManual ? '#91caff' : '#d9d9d9'}`,
+                borderRadius: 8,
+              }}
+            >
+              Penerimaan Tahun Sebelumnya (Manual)
+            </Checkbox>
+          </Flex>
+        }
         style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
       >
         <Form
@@ -460,37 +531,46 @@ export default function TransactionOutAddRawMaterial() {
                   placeholder="Nilai bankAccountId"
                 />
               </Form.Item>
+              <Form.Item name="BankaccountCode" hidden>
+                <Input />
+              </Form.Item>
 
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
-                <Form.Item
-                  label="kategori"
-                  style={{ flex: 1, width: '100%' }}
-                  name="accountCode"
-                  rules={[{ required: true, message: 'Masukan nilai kategori!' }]}
+              {!isManual && (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                  }}
                 >
-                  <Select
-                    style={{ width: '100%' }}
-                    disabled
-                    prefix={<TagChevron size={16} />}
-                    placeholder="Kategori"
-                    options={dataAccount.map((item) => ({ value: item.id, label: item.name }))}
-                  />
-                </Form.Item>
-                <Tooltip title="search">
-                  <Button
-                    type="primary"
-                    onClick={() => setOpenKategori(true)}
-                    shape="circle"
-                    icon={<SearchOutlined />}
-                  />
-                </Tooltip>
-              </div>
+                  <Form.Item
+                    label="kategori"
+                    style={{ flex: 1, width: '100%' }}
+                    name="accountCode"
+                    rules={[{ required: true, message: 'Masukan nilai kategori!' }]}
+                  >
+                    <Select
+                      style={{ width: '100%' }}
+                      disabled
+                      prefix={<TagChevron size={16} />}
+                      placeholder="Kategori"
+                      options={dataAccount.map((item) => ({
+                        value: item.id,
+                        label: item.name,
+                      }))}
+                    />
+                  </Form.Item>
+
+                  <Tooltip title="search">
+                    <Button
+                      type="primary"
+                      onClick={() => setOpenKategori(true)}
+                      shape="circle"
+                      icon={<SearchOutlined />}
+                    />
+                  </Tooltip>
+                </div>
+              )}
 
               <Form.Item
                 label="Nomor Transaksi"
@@ -551,7 +631,7 @@ export default function TransactionOutAddRawMaterial() {
               >
                 <InputNumber
                   controls={false}
-                  disabled
+                  disabled={!isManual}
                   formatter={globalHelpers.formatter}
                   parser={globalHelpers.parser}
                   style={{ width: '100%' }}
@@ -563,11 +643,51 @@ export default function TransactionOutAddRawMaterial() {
               <Form.Item
                 label="Total"
                 name="payAmount"
-                rules={[{ required: true, message: 'Masukan jumlah!' }]}
+                rules={[
+                  { required: true, message: 'Masukan jumlah!' },
+                  {
+                    validator: (_, value) => {
+                      // Validasi ini hanya berlaku untuk mode Default.
+                      if (isManual) {
+                        return Promise.resolve();
+                      }
+
+                      const amount = Number(form.getFieldValue('amount') || 0);
+                      const payment = Number(value || 0);
+                      const debitMaterial = Number(entries[0]?.debit || 0);
+
+                      if (!Number.isFinite(payment) || payment <= 0) {
+                        return Promise.reject(new Error('Jumlah pembayaran harus lebih dari 0!'));
+                      }
+
+                      if (!Number.isFinite(debitMaterial) || debitMaterial <= 0) {
+                        return Promise.reject(new Error('Pembayaran material harus lebih dari 0!'));
+                      }
+
+                      if (debitMaterial > amount) {
+                        return Promise.reject(
+                          new Error('Pembayaran material tidak boleh melebihi sisa tagihan!')
+                        );
+                      }
+
+                      if (payment < debitMaterial) {
+                        return Promise.reject(
+                          new Error(
+                            'Total uang keluar tidak boleh lebih kecil dari pembayaran material!'
+                          )
+                        );
+                      }
+
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
                 extra={<TextTerbilang form={form} properti="payAmount" />}
               >
                 <InputNumber
                   controls={false}
+                  min={isManual ? undefined : 1}
+                  precision={2}
                   formatter={globalHelpers.formatter}
                   parser={globalHelpers.parser}
                   style={{ width: '100%' }}
@@ -609,16 +729,16 @@ export default function TransactionOutAddRawMaterial() {
               </div>
 
               <Form.Item
-                label="Tujuan Transaksi"
+                label="Penerima"
                 style={{ flex: 1, width: '100%' }}
                 name="to"
-                rules={[{ required: true, message: 'Masukan Tujuan Transaksi!' }]}
+                rules={[{ required: true, message: 'Masukan Penerima!' }]}
               >
                 <Input
-                  disabled
+                  disabled={!isManual}
                   style={{ width: '100%' }}
                   prefix={<TagChevron size={16} />}
-                  placeholder="Tujuan Transaksi"
+                  placeholder="Penerima"
                 />
               </Form.Item>
 
@@ -629,7 +749,7 @@ export default function TransactionOutAddRawMaterial() {
                 rules={[{ required: true, message: 'Masukan Alamat Penerima' }]}
               >
                 <Input
-                  disabled
+                  disabled={!isManual}
                   style={{ width: '100%' }}
                   prefix={<MapPin size={16} />}
                   placeholder="Alamat Penerima"
@@ -646,7 +766,7 @@ export default function TransactionOutAddRawMaterial() {
                 rules={[{ required: true, message: 'Masukan unit' }]}
               >
                 <Select
-                  disabled
+                  disabled={!isManual}
                   prefix={<Unite />}
                   showSearch
                   loading={unit.loading}
