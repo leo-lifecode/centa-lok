@@ -417,17 +417,47 @@ export class SpbsService {
 		});
 	}
 
-	createRN(createSpbDto: CreateSpbDto, staffId: string) {
-		return this.prisma.$transaction(async (tx) => {
-			const stockLogEkspek = await tx.purchaseOrder.findUnique({
-				where: {
-					id: createSpbDto.purchaseOrderId,
-				},
-				include: {
-					items: true,
-				},
-			});
+	async createRN(createSpbDto: CreateSpbDto, staffId: string) {
+		// Query baca & pembuatan jurnal dilakukan di luar transaksi agar transaksi tetap singkat
+		// (DB remote lambat -> P2028 'Transaction already closed').
+		const stockLogEkspek = await this.prisma.purchaseOrder.findUnique({
+			where: {
+				id: createSpbDto.purchaseOrderId,
+			},
+			include: {
+				items: true,
+			},
+		});
 
+		const data = await this.prisma.purchaseOrderTax.findMany({
+			where: {
+				purchaseOrderId: createSpbDto.purchaseOrderId,
+			},
+		});
+
+		const numberJurnal = await this.createJournal();
+		const taxLabels = data.map((t) => t.taxType);
+
+		const taxes = await this.prisma.tax.findMany({
+			where: { taxType: { in: taxLabels } },
+		});
+
+		const additional = taxes.map((tax) => ({
+			usage: 'ppn',
+			amount: stockLogEkspek.subtotalAmount * tax.taxValue,
+		}));
+
+		const journalEntries = await this.helperGlobal.generateJournalEntriesFromMappingV2({
+			module: Module.SALES,
+			transactionType: TransactionTypeMapping.INVOICE,
+			baseAmountDebit: Number(stockLogEkspek.totalAmount) || 0,
+			baseAmountCredit: stockLogEkspek.subtotalAmount || 0,
+			// additional: [{ usage: 'ppn', position: 'CREDIT', amount: totalPPN }],
+			additional: additional,
+			unitId: stockLogEkspek.unitId,
+		});
+
+		return this.prisma.$transaction(async (tx) => {
 			await tx.inventoryTransaction.createMany({
 				data: createSpbDto.stockLogs.map((item) => ({
 					source: 'penjualan',
@@ -438,34 +468,6 @@ export class SpbsService {
 					nilaiSatuan: item.nilaiSatuan,
 					unitId: stockLogEkspek.unitId,
 				})),
-			});
-
-			const data = await tx.purchaseOrderTax.findMany({
-				where: {
-					purchaseOrderId: createSpbDto.purchaseOrderId,
-				},
-			});
-
-			const numberJurnal = await this.createJournal();
-			const taxLabels = data.map((t) => t.taxType);
-
-			const taxes = await tx.tax.findMany({
-				where: { taxType: { in: taxLabels } },
-			});
-
-			const additional = taxes.map((tax) => ({
-				usage: 'ppn',
-				amount: stockLogEkspek.subtotalAmount * tax.taxValue,
-			}));
-
-			const journalEntries = await this.helperGlobal.generateJournalEntriesFromMappingV2({
-				module: Module.SALES,
-				transactionType: TransactionTypeMapping.INVOICE,
-				baseAmountDebit: Number(stockLogEkspek.totalAmount) || 0,
-				baseAmountCredit: stockLogEkspek.subtotalAmount || 0,
-				// additional: [{ usage: 'ppn', position: 'CREDIT', amount: totalPPN }],
-				additional: additional,
-				unitId: stockLogEkspek.unitId,
 			});
 
 			//input barang dikirim
