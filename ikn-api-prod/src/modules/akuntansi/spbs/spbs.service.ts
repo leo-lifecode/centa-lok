@@ -410,6 +410,10 @@ export class SpbsService {
 			return {
 				dataSpb,
 			};
+		},
+		{
+			maxWait: 10000,
+			timeout: 15000,
 		});
 	}
 
@@ -594,6 +598,11 @@ export class SpbsService {
 			return {
 				dataSpb,
 			};
+		},
+		{
+			// Default Prisma (maxWait 2s / timeout 5s) terlalu singkat untuk DB remote -> P2028.
+			maxWait: 10000,
+			timeout: 15000,
 		});
 	}
 
