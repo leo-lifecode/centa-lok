@@ -229,8 +229,11 @@ export default function SpbsAdd() {
   ];
 
   const handleRowDoubleClick = async (record: SpbsInterfaces.DeliverySpbType) => {
+    // Tutup modal segera agar tidak terasa lambat; data dimuat di latar belakang.
+    setOpen(false);
+    setDataSourceItemsSpb([]);
+    setLoading(true);
     try {
-      console.log('DATA RECORD SPB:', record);
       const data = await SpbsAxios.fetchDataStokLogByOrderNumber(record.purchaseOrder.orderNumber);
 
       setDataLogs(data);
@@ -275,9 +278,10 @@ export default function SpbsAdd() {
       } else {
         setDataSourceItems(record.purchaseOrder.items as any);
       }
-      setOpen((open) => !open);
     } catch (e) {
-      showNotification('error', 'Gagal', 'Terjadi Kesalahan');
+      showNotification('error', 'Gagal', 'Gagal memuat data pesanan');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -291,7 +295,7 @@ export default function SpbsAdd() {
   };
   return (
     <Card
-      title={<TitleCardAdd title="Edit SPBS" />}
+      title={<TitleCardAdd title="Tambah SPBS" />}
       style={{ boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.1)' }}
     >
       <DrawerSpb
