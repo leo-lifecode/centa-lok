@@ -1,9 +1,16 @@
 import type { NotificationInstance } from 'antd/es/notification/interface';
+import {
+  CONNECTION_ERROR_MESSAGE,
+  CONNECTION_ERROR_TITLE,
+  hasRecentConnectionError,
+} from '@/utils/connectionError';
+
 let notificationApi: NotificationInstance | null = null;
 export function setNotificationApi(api: NotificationInstance) {
   notificationApi = api;
 }
 type NotificationType = 'success' | 'info' | 'warning' | 'error';
+
 export function showNotification(
   type: NotificationType,
   title: string,
@@ -15,9 +22,10 @@ export function showNotification(
     return;
   }
 
+  const isConn = type === 'error' && hasRecentConnectionError();
   notificationApi[type]({
-    message: title,
-    description,
+    message: isConn ? CONNECTION_ERROR_TITLE : title,
+    description: isConn ? CONNECTION_ERROR_MESSAGE : description,
     placement,
   });
 }
