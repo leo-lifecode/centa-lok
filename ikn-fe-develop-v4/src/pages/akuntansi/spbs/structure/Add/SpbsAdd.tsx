@@ -85,6 +85,18 @@ export default function SpbsAdd() {
 
   const onFinish = async (values: SpbsInterfaces.PayloadSpbPosType) => {
     try {
+      if (
+        values.typeSalesSPb !== 'RA' &&
+        dataSourceItemsSpb.some((items: any) => !items.deliveryOrderDetailId)
+      ) {
+        showNotification(
+          'warning',
+          'Barang belum punya Delivery Order',
+          'Ada barang yang belum tercatat di Delivery Order pesanan ini. Periksa Delivery Order terlebih dahulu.'
+        );
+        return;
+      }
+
       const valueSend = {
         purchaseOrderId: values.purchaseOrderId,
         orderNumber: values.orderNumber,
@@ -103,11 +115,9 @@ export default function SpbsAdd() {
         stockLogs: dataSourceItemsSpb.map((items: any) => ({
           productId: items.productId,
 
-          ...(values.typeSalesSPb === 'RA'
-            ? {
-                deliveryOrderDetailId: items.id,
-              }
-            : {}),
+          // RA: item sudah berupa detail DO (id = DeliveryOrderDetail.id).
+          // RN / RN Ekspor: item berupa item PO, id detail DO dipetakan saat memilih pesanan.
+          deliveryOrderDetailId: values.typeSalesSPb === 'RA' ? items.id : items.deliveryOrderDetailId,
 
           quantity: items.quantity,
           qtyKirim:
@@ -273,7 +283,18 @@ export default function SpbsAdd() {
 
         setDataSourceItems(deliveryOrderItems as any);
       } else {
-        setDataSourceItems(record.purchaseOrder.items as any);
+        const doDetails: any[] = Array.isArray(deliveryOrder?.DeliveryOrderDetail)
+          ? deliveryOrder.DeliveryOrderDetail
+          : [];
+        // Petakan item PO -> detail Delivery Order (dibutuhkan backend sebagai deliveryOrderDetailId)
+        const poItems = (record.purchaseOrder.items as any[]).map((item: any) => ({
+          ...item,
+          deliveryOrderDetailId: (
+            doDetails.find((d: any) => d.purchaseOrderItemId === item.id) ??
+            doDetails.find((d: any) => d.productId === item.productId)
+          )?.id,
+        }));
+        setDataSourceItems(poItems as any);
       }
       setOpen((open) => !open);
     } catch (e) {
