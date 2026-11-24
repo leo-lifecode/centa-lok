@@ -5,7 +5,12 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 	constructor() {
 		// Default Prisma: maxWait 2s & timeout 5s -> terlalu singkat untuk DB remote (Supabase) sehingga P2028.
-		super();
+		super({
+			transactionOptions: {
+				maxWait: Number(process.env.PRISMA_TX_MAX_WAIT_MS) || 10000,
+				timeout: Number(process.env.PRISMA_TX_TIMEOUT_MS) || 30000,
+			},
+		});
 
 		// Middleware untuk menyaring data yang belum dihapus (soft delete)
 		this.$use(async (params, next) => {
