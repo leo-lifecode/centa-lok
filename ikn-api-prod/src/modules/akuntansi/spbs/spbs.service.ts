@@ -112,6 +112,10 @@ export class SpbsService {
 
 					const detailId = item.deliveryOrderDetailId;
 
+					if (!detailId) {
+						throw new BadRequestException(`Detail Delivery Order untuk product ${item.productId} wajib diisi`);
+					}
+
 					const doDetail = doDetailById.get(detailId);
 
 					if (!doDetail) {
@@ -162,7 +166,7 @@ export class SpbsService {
 
 						itemsSPB: {
 							create: createSpbDto.stockLogs.map((item) => {
-								const deliveryOrderDetail = doDetailById.get(item.deliveryOrderDetailId);
+								const deliveryOrderDetail = doDetailById.get(item.deliveryOrderDetailId as string);
 
 								if (!deliveryOrderDetail) {
 									throw new Error(`Detail Delivery Order untuk product ${item.productId} tidak ditemukan`);
