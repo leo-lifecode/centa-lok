@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Drawer, InputNumber, Space, Table, message } from 'antd';
+import { Button, Drawer, InputNumber, Space, Table } from 'antd';
+import { showNotification } from '@/contexts/services/notificationService';
 import * as globalHelpers from '@/utils/helper';
 import type { FormInstance, TableColumnsType, TableProps } from 'antd';
 
@@ -192,15 +193,22 @@ export default function DrawerSpb({
             type="primary"
             onClick={() => {
               if (selected.length === 0) {
-                message.warning('Pilih minimal satu barang.');
+                showNotification('warning', 'Belum ada barang dipilih', 'Centang minimal satu barang terlebih dahulu.');
                 return;
               }
 
-              if (
-                typeSalesSPb === 'RA' &&
-                selected.some((item: any) => !item.qtyKirim || item.qtyKirim <= 0)
-              ) {
-                message.warning('Isi Qty Kirim (lebih dari 0) untuk setiap barang yang dipilih.');
+              const qtyKosong =
+                typeSalesSPb === 'RA'
+                  ? selected.filter((item: any) => !(Number(item.qtyKirim) > 0))
+                  : [];
+              if (qtyKosong.length > 0) {
+                showNotification(
+                  'warning',
+                  'Qty Kirim masih 0',
+                  `Masukkan Qty Kirim (lebih dari 0) untuk: ${qtyKosong
+                    .map((item: any) => item.namabarangProduct)
+                    .join(', ')}.`
+                );
                 return;
               }
 
