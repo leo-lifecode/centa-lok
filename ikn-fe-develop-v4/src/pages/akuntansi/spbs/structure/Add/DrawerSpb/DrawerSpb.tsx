@@ -81,7 +81,7 @@ export default function DrawerSpb({
 
               return (
                 <InputNumber
-                  min="0.01"
+                  min="0"
                   max={String(sisaQty)}
                   controls={false}
                   stringMode
