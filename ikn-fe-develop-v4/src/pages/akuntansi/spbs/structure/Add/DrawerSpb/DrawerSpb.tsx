@@ -87,7 +87,6 @@ export default function DrawerSpb({
               return (
                 <InputNumber
                   min="0"
-                  max={String(sisaQty)}
                   controls={false}
                   stringMode
                   decimalSeparator=","
