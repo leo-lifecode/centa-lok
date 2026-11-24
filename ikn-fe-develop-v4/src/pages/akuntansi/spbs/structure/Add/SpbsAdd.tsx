@@ -229,10 +229,7 @@ export default function SpbsAdd() {
   ];
 
   const handleRowDoubleClick = async (record: SpbsInterfaces.DeliverySpbType) => {
-    // Tutup modal segera agar tidak terasa lambat; data dimuat di latar belakang.
-    setOpen(false);
-    setDataSourceItemsSpb([]);
-    setLoading(true);
+ 
     try {
       const data = await SpbsAxios.fetchDataStokLogByOrderNumber(record.purchaseOrder.orderNumber);
 
@@ -278,6 +275,7 @@ export default function SpbsAdd() {
       } else {
         setDataSourceItems(record.purchaseOrder.items as any);
       }
+       setOpen((open) => !open);
     } catch (e) {
       showNotification('error', 'Gagal', 'Gagal memuat data pesanan');
     } finally {

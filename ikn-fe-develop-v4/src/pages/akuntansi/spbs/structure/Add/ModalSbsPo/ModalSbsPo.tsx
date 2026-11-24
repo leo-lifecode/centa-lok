@@ -384,7 +384,7 @@ export default function ModalSpbsPo({
         pagination={false}
         onRow={(record) => {
           return {
-            onClick: () => handleRowDoubleClick(record),
+            onDoubleClick: () => handleRowDoubleClick(record),
             style: { cursor: 'pointer' },
           };
         }}
