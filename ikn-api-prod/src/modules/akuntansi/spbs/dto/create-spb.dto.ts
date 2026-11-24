@@ -9,10 +9,13 @@ export class StockLogs {
 	@ApiProperty({ description: 'productId', type: String, example: 'uuid productId' })
 	productId: string;
 
-	// Hanya dipakai SPB RA (divalidasi di service). SPB RN / RN Ekspor tidak mengirimnya.
-	@Validators.IsOptional()
+	// Wajib hanya untuk SPB RA. SPB RN / RN Ekspor tidak punya DeliveryOrderDetail, jadi dilewati.
+	@Validators.ValidateIf((o: StockLogs) => o.typeSalesSPb === 'RA')
 	@Validators.IsString({
 		message: 'deliveryOrderDetailId harus string',
+	})
+	@Validators.IsNotEmpty({
+		message: 'deliveryOrderDetailId tidak boleh kosong',
 	})
 	@ApiProperty({
 		description: 'ID Detail Delivery Order (wajib untuk SPB RA)',
