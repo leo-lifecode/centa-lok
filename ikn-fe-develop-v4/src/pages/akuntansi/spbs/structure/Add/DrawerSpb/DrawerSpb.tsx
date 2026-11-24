@@ -62,6 +62,11 @@ export default function DrawerSpb({
     ...(typeSalesSPb === 'RA'
       ? [
           {
+            title: 'Sisa Qty',
+            key: 'sisaQty',
+            render: (_: any, record: any) => getSisaQty(record),
+          },
+          {
             title: 'Qty Kirim',
             dataIndex: 'qtyKirim',
             render: (_: any, record: any) => {
@@ -100,6 +105,14 @@ export default function DrawerSpb({
                       Math.max(Number.isFinite(qtyInput) ? qtyInput : 0, 0),
                       sisaQty
                     );
+
+                    if (qtyInput > sisaQty) {
+                      showNotification(
+                        'warning',
+                        'Qty Kirim melebihi sisa',
+                        `Sisa qty ${record.namabarangProduct} tinggal ${sisaQty} (sisanya sudah dikirim di SPB sebelumnya). Qty Kirim disesuaikan menjadi ${sisaQty}.`
+                      );
+                    }
 
                     setSelected((prev: any[]) =>
                       prev.map((selectedItem: any) =>
