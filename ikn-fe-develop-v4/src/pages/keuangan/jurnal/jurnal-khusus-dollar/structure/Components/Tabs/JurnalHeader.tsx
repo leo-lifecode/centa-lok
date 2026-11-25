@@ -30,6 +30,22 @@ import { DeleteOutlined } from '@ant-design/icons';
 import { useAccess } from '@/contexts/AccessContext';
 const monthFormat = 'YYYY-MM';
 
+// Teks konfirmasi hapus sesuai asal jurnal.
+const getDeleteConfirmText = (record: any): string => {
+  const base = 'Apakah Anda yakin ingin menghapus data ini?';
+  if (record?.rawMaterialIssueId) {
+    return `${base} Jurnal ini dari Barang Material (Pengeluaran). Menghapus akan menjalankan Revert pengeluaran.`;
+  }
+  if (record?.rawMaterialReceiptId) {
+    return base;
+  }
+  if (record?.transactionId) {
+    return `${base} Jika jurnal berasal dari Uang Masuk Bank (Dollar), transaksi Uang Masuk terkait ikut dihapus.`;
+  }
+  return base;
+};
+
+
 export interface JournalData {
   id: string;
   spbId: string;
@@ -356,7 +372,7 @@ function JournalTable({
             onClick={() => handleEdit(record.id)}
           />
           <Popconfirm
-            title="Apakah Anda yakin ingin menghapus data ini? Jika jurnal berasal dari Uang Masuk Bank (Dollar), transaksi Uang Masuk terkait ikut dihapus."
+            title={getDeleteConfirmText(record)}
             okText="Ya"
             cancelText="Batal"
             onConfirm={() => handleDelete(record.id)} // Fungsi delete
