@@ -402,7 +402,8 @@ function JournalTable({
               <Button
                 disabled={
                   record.isRevert === 'Y' ||
-                  record.isPosted ||
+                  // Jurnal BPP (Pengeluaran Barang) yang sudah diposting tetap bisa dihapus (= Revert pengeluaran)
+                  (record.isPosted && !record.rawMaterialIssueId) ||
                   !helperGlobal.hasAccessButton(acc, '/jurnal-khusus', 'delete')
                 }
                 type="primary"
