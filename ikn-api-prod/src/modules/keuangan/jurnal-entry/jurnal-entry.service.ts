@@ -151,6 +151,9 @@ export class JurnalEntryService {
 
 		whereCondition.isRevert = 'N';
 
+		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang.
+		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }] }];
+
 		const [data, totalData, postCount] = await this.prisma.$transaction([
 			this.prisma.journalEntry.findMany({
 				skip,
@@ -196,6 +199,8 @@ export class JurnalEntryService {
 			unitId,
 		} = query;
 		const whereCondition: any = {};
+		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang.
+		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }] }];
 
 		if (periode) {
 			const [year, month] = periode.split('-').map(Number);

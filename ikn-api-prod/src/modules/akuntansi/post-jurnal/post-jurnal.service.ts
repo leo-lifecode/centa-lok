@@ -3,11 +3,15 @@ import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.con
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { CreateJurnalEntryDto } from '@src/modules/keuangan/jurnal-entry/dto/create-jurnal-entry.dto';
 import dayjs from 'dayjs';
+import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { GetPostJurnalEntryDto } from './dto/get-post-jurnal.dto';
 
 @Injectable({ scope: Scope.REQUEST })
 export class PostJurnalService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly rawMaterialService: RawMaterialService,
+	) {}
 	private getPeriod(date: string): string {
 		const d = new Date(date);
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -77,6 +81,16 @@ export class PostJurnalService {
 	}
 
 	async postJournalRevert(journalId: string, createJurnalEntryDto: CreateJurnalEntryDto, decoded: DecodeTokenType) {
+		// Jurnal Pengeluaran Barang (BPP): Revert di Jurnal = Revert pengeluaran di Gudang
+		// (stok & buku besar dibalik, jurnal berstatus CANCELLED sehingga langsung hilang dari daftar Jurnal).
+		const issueJournal = await this.prisma.journalEntry.findFirst({
+			where: { id: journalId, deletedAt: null },
+			select: { rawMaterialIssueId: true },
+		});
+		if (issueJournal?.rawMaterialIssueId) {
+			return this.rawMaterialService.revertIssue(issueJournal.rawMaterialIssueId, decoded);
+		}
+
 		return this.prisma.$transaction(async (trx) => {
 			const journal = await trx.journalEntry.findUnique({
 				where: { id: journalId },
