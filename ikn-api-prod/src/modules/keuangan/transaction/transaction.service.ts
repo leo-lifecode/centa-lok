@@ -2453,16 +2453,31 @@ export class TransactionService {
 	// 2. Manual / Tanpa Invoice
 	// =====================================================
 
-	async remove(id: string) {
+	/**
+	 * Hapus transaksi bank (soft delete) beserta jurnalnya.
+	 * - Saldo bank dibalik sesuai tipe: CASH_IN dikurangi, CASH_OUT dikembalikan.
+	 * - Jurnal utama & mirror (beserta detail) di-soft-delete, nomor diganti UUID.
+	 * - Invoice Rp / PO TIDAK dibalik (di luar lingkup jurnal).
+	 * - `skipActionCheck`: dipakai saat dihapus lewat menu Jurnal (tidak perlu saklar isActionEnabled).
+	 */
+	async remove(id: string, options: { skipActionCheck?: boolean } = {}) {
 		return this.prisma.$transaction(
 			async (tx) => {
-				const existing = await tx.cashBankTransaction.findFirstOrThrow({
-					where: { id },
+				const existing = await tx.cashBankTransaction.findFirst({
+					where: { id, deletedAt: null },
 					include: {
-						journalEntry: { include: { details: true } },
+						journalEntry: { where: { deletedAt: null }, include: { details: true } },
 						cashBankTransactionDetails: true,
 					},
 				});
+
+				if (!existing) {
+					throw new NotFoundException('Transaksi tidak ditemukan.');
+				}
+
+				if (!options.skipActionCheck && !existing.isActionEnabled) {
+					throw new BadRequestException('Aksi hapus belum diaktifkan untuk transaksi ini.');
+				}
 
 				const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
 				const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
@@ -2480,33 +2495,25 @@ export class TransactionService {
 				}
 
 				// =====================================================
-				// REVERSE SALDO BANK
+				// REVERSE SALDO BANK (CASH_IN dikurangi, CASH_OUT dikembalikan)
 				// =====================================================
 				if (existing.bank_account_id) {
-					if (existing.currency === 'DOLLAR') {
-						// Kembalikan saldo Rupiah dan Dollar
-						await tx.bankAccount.update({
-							where: { id: existing.bank_account_id },
-							data: {
-								currentBalance: {
-									decrement: existing.amountInIDR || 0,
-								},
-								currentBalanceDollar: {
-									decrement: existing.amountOriginal || 0,
-								},
-							},
-						});
-					} else {
-						// Mekanisme transaksi Rupiah tetap seperti sebelumnya
-						await tx.bankAccount.update({
-							where: { id: existing.bank_account_id },
-							data: {
-								currentBalance: {
-									decrement: existing.amountInIDR || 0,
-								},
-							},
-						});
-					}
+					const isCashOut = existing.type === 'CASH_OUT';
+					const amountIdr = existing.amountInIDR || 0;
+					const amountUsd = existing.amountOriginal || 0;
+
+					await tx.bankAccount.update({
+						where: { id: existing.bank_account_id },
+						data:
+							existing.currency === 'DOLLAR'
+								? {
+										currentBalance: isCashOut ? { increment: amountIdr } : { decrement: amountIdr },
+										currentBalanceDollar: isCashOut ? { increment: amountUsd } : { decrement: amountUsd },
+									}
+								: {
+										currentBalance: isCashOut ? { increment: amountIdr } : { decrement: amountIdr },
+									},
+					});
 				}
 
 				// =====================================================
@@ -2536,31 +2543,34 @@ export class TransactionService {
 				}
 
 				// =====================================================
-				// HAPUS JURNAL DAN DETAIL
+				// SOFT DELETE JURNAL & DETAIL (utama + mirror)
 				// =====================================================
+				const journalIds = [mainJournal.id, ...(mirrorJournal ? [mirrorJournal.id] : [])];
+				const now = nowWIBString();
+
 				await tx.journalAdjustmentSuggestion.deleteMany({
-					where: { transactionId: id },
+					where: {
+						OR: [{ transactionId: id }, { journalEntryId: { in: journalIds } }],
+					},
 				});
 
-				await tx.journalEntryDetail.deleteMany({
-					where: { journalEntryId: mainJournal.id },
+				await tx.journalEntryDetail.updateMany({
+					where: { journalEntryId: { in: journalIds }, deletedAt: null },
+					data: { deletedAt: now },
 				});
 
-				await tx.journalEntry.delete({
-					where: { id: mainJournal.id },
-				});
-
-				if (mirrorJournal) {
-					await tx.journalEntryDetail.deleteMany({
-						where: { journalEntryId: mirrorJournal.id },
-					});
-
-					await tx.journalEntry.delete({
-						where: { id: mirrorJournal.id },
+				for (const journalId of journalIds) {
+					await tx.journalEntry.update({
+						where: { id: journalId },
+						data: { deletedAt: now, numberJurnal: crypto.randomUUID() },
 					});
 				}
 
-				// Hapus detail transaksi
+				// Pajak potongan & detail transaksi ikut dihapus (tabel tanpa deletedAt)
+				await tx.withholdingTax.deleteMany({
+					where: { transactionId: id },
+				});
+
 				await tx.cashBankTransactionDetails.deleteMany({
 					where: { cashBankTransactionId: id },
 				});
@@ -2569,7 +2579,7 @@ export class TransactionService {
 				return tx.cashBankTransaction.update({
 					where: { id },
 					data: {
-						deletedAt: nowWIBString(),
+						deletedAt: now,
 						transactionNumber: crypto.randomUUID(),
 					},
 				});
