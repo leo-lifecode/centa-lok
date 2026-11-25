@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, Scope } from '@nestjs/common';
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
+import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
 import { nowWIBString } from '@src/shared/utils/glolabalFunc';
 import dayjs from 'dayjs';
@@ -13,6 +14,7 @@ export class JurnalEntryService {
 	constructor(
 		private readonly shareModuleService: ShareModuleService,
 		private readonly prisma: PrismaService,
+		private readonly rawMaterialService: RawMaterialService,
 	) {}
 
 	async createJournal(plus = 1) {
@@ -151,8 +153,9 @@ export class JurnalEntryService {
 
 		whereCondition.isRevert = 'N';
 
-		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang.
-		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }] }];
+		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang
+		// (CONFIRMED & belum isPosted = sudah pernah diposting lalu di-Revert dari Jurnal).
+		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }, { status: 'CONFIRMED' }] }];
 
 		const [data, totalData, postCount] = await this.prisma.$transaction([
 			this.prisma.journalEntry.findMany({
@@ -199,8 +202,9 @@ export class JurnalEntryService {
 			unitId,
 		} = query;
 		const whereCondition: any = {};
-		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang.
-		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }] }];
+		// Jurnal Pengeluaran Barang (BPP) baru tampil di Jurnal setelah diposting dari menu Gudang
+		// (CONFIRMED & belum isPosted = sudah pernah diposting lalu di-Revert dari Jurnal).
+		whereCondition.AND = [{ OR: [{ rawMaterialIssueId: null }, { isPosted: true }, { status: 'CONFIRMED' }] }];
 
 		if (periode) {
 			const [year, month] = periode.split('-').map(Number);
@@ -748,7 +752,26 @@ export class JurnalEntryService {
 		}
 	}
 
-	remove(id: string) {
+	async remove(id: string, decoded: DecodeTokenType) {
+		// Jurnal Gudang (BPP/BPB) yang sudah di-Revert dari Jurnal (isPosted=false, CONFIRMED):
+		// Hapus = balik stok & status dokumen Gudang (buku besar sudah dibalik saat Revert),
+		// jurnal berstatus CANCELLED sehingga hilang dari Jurnal dan tombol di Gudang aktif lagi.
+		const warehouseJournal = await this.prisma.journalEntry.findFirst({
+			where: { id, deletedAt: null },
+			select: { isPosted: true, status: true, isRevert: true, rawMaterialIssueId: true, rawMaterialReceiptId: true },
+		});
+		if (warehouseJournal?.rawMaterialIssueId || warehouseJournal?.rawMaterialReceiptId) {
+			if (warehouseJournal.isPosted) {
+				throw new BadRequestException('Jurnal sudah diposting, tidak dapat dihapus. Revert dulu.');
+			}
+			if (warehouseJournal.status !== 'CONFIRMED' || warehouseJournal.isRevert !== 'N') {
+				throw new BadRequestException('Jurnal ini belum diposting dari Gudang atau sudah di-Revert.');
+			}
+			return warehouseJournal.rawMaterialIssueId
+				? this.rawMaterialService.revertIssue(warehouseJournal.rawMaterialIssueId, decoded, { glAlreadyReverted: true })
+				: this.rawMaterialService.revertReceipt(warehouseJournal.rawMaterialReceiptId, decoded, { glAlreadyReverted: true });
+		}
+
 		return this.prisma.$transaction(async (tx) => {
 			// ---- SYARAT HAPUS: jurnal ada dan belum diposting (DRAFT atau sudah di-Revert) ----
 			const target = await tx.journalEntry.findFirst({

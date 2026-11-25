@@ -249,6 +249,13 @@ export class RawMaterialService {
 						},
 					},
 					items: true,
+					// Status jurnal terbaru: dipakai FE untuk menonaktifkan Revert saat jurnal sudah di-Revert dari menu Jurnal.
+					journalEntry: {
+						where: { deletedAt: null },
+						orderBy: { createdAt: 'desc' },
+						take: 1,
+						select: { id: true, isPosted: true, isRevert: true, status: true },
+					},
 				},
 				where: whereCondition,
 				orderBy: orderBy ?? { createdAt: 'desc' },
@@ -805,7 +812,12 @@ export class RawMaterialService {
 		);
 	}
 
-	async revertIssue(id: string, decoded: DecodeTokenType) {
+	/**
+	 * @param options.glAlreadyReverted true jika buku besar sudah dibalik lebih dulu lewat Revert di menu Jurnal
+	 * (jurnal berstatus isPosted=false, CONFIRMED). Maka hanya stok & status dokumen yang dibalik.
+	 */
+	async revertIssue(id: string, decoded: DecodeTokenType, options: { glAlreadyReverted?: boolean } = {}) {
+		const glDone = options.glAlreadyReverted === true;
 		return this.prisma.$transaction(
 			async (tx) => {
 				// =====================================================
@@ -857,7 +869,7 @@ export class RawMaterialService {
 				// =====================================================
 				// 3. Validasi status jurnal.
 				// =====================================================
-				if (!journal.isPosted || journal.status !== 'CONFIRMED' || journal.isRevert !== 'N') {
+				if (journal.isPosted === glDone || journal.status !== 'CONFIRMED' || journal.isRevert !== 'N') {
 					throw new BadRequestException('Pengeluaran harus berstatus POSTED sebelum di-Revert');
 				}
 
@@ -889,7 +901,7 @@ export class RawMaterialService {
 					where: {
 						id: journal.id,
 						deletedAt: null,
-						isPosted: true,
+						isPosted: !glDone,
 						isRevert: 'N',
 						status: 'CONFIRMED',
 					},
@@ -1116,7 +1128,7 @@ export class RawMaterialService {
 				// =====================================================
 				// 11. Balik dampak jurnal pada General Ledger.
 				// =====================================================
-				for (const detail of journal.details) {
+				for (const detail of glDone ? [] : journal.details) {
 					const debit = Number(detail.debit);
 					const credit = Number(detail.credit);
 
@@ -2128,7 +2140,9 @@ export class RawMaterialService {
 		);
 	}
 
-	async revertReceipt(id: string, decoded: DecodeTokenType) {
+	/** @see revertIssue untuk arti options.glAlreadyReverted */
+	async revertReceipt(id: string, decoded: DecodeTokenType, options: { glAlreadyReverted?: boolean } = {}) {
+		const glDone = options.glAlreadyReverted === true;
 		return this.prisma.$transaction(
 			async (tx) => {
 				// 1. Klaim dokumen agar tidak direvert dua kali bersamaan.
@@ -2188,7 +2202,7 @@ export class RawMaterialService {
 				}
 
 				const journal = receipt.journalEntry.find(
-					(item) => item.isPosted === true && item.status === 'CONFIRMED' && item.isRevert !== 'Y',
+					(item) => item.isPosted === !glDone && item.status === 'CONFIRMED' && item.isRevert !== 'Y',
 				);
 
 				if (!journal) {
@@ -2520,7 +2534,7 @@ export class RawMaterialService {
 					}
 				>();
 
-				for (const detail of journal.details) {
+				for (const detail of glDone ? [] : journal.details) {
 					const debit = Number(detail.debit);
 					const credit = Number(detail.credit);
 

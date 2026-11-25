@@ -3,15 +3,11 @@ import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.con
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { CreateJurnalEntryDto } from '@src/modules/keuangan/jurnal-entry/dto/create-jurnal-entry.dto';
 import dayjs from 'dayjs';
-import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { GetPostJurnalEntryDto } from './dto/get-post-jurnal.dto';
 
 @Injectable({ scope: Scope.REQUEST })
 export class PostJurnalService {
-	constructor(
-		private readonly prisma: PrismaService,
-		private readonly rawMaterialService: RawMaterialService,
-	) {}
+	constructor(private readonly prisma: PrismaService) {}
 	private getPeriod(date: string): string {
 		const d = new Date(date);
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -81,21 +77,6 @@ export class PostJurnalService {
 	}
 
 	async postJournalRevert(journalId: string, createJurnalEntryDto: CreateJurnalEntryDto, decoded: DecodeTokenType) {
-		// Jurnal Gudang: Revert di Jurnal = Revert dokumen di Gudang
-		// (stok & buku besar dibalik, jurnal berstatus CANCELLED sehingga langsung hilang dari daftar Jurnal).
-		const warehouseJournal = await this.prisma.journalEntry.findFirst({
-			where: { id: journalId, deletedAt: null },
-			select: { rawMaterialIssueId: true, rawMaterialReceiptId: true },
-		});
-		// BPP: Barang Material (Pengeluaran)
-		if (warehouseJournal?.rawMaterialIssueId) {
-			return this.rawMaterialService.revertIssue(warehouseJournal.rawMaterialIssueId, decoded);
-		}
-		// BPB: Barang Material (Penerimaan)
-		if (warehouseJournal?.rawMaterialReceiptId) {
-			return this.rawMaterialService.revertReceipt(warehouseJournal.rawMaterialReceiptId, decoded);
-		}
-
 		return this.prisma.$transaction(async (trx) => {
 			const journal = await trx.journalEntry.findUnique({
 				where: { id: journalId },
@@ -156,9 +137,13 @@ export class PostJurnalService {
 			// });
 
 			// Mark journal as posted
+			// Jurnal dari Gudang (BPP/BPB): status tetap CONFIRMED (isPosted=false) sebagai penanda
+			// "pernah diposting dari Gudang" -> tetap tampil di Jurnal, tombol Gudang tetap nonaktif
+			// sampai jurnal dihapus (Hapus = revert stok & dokumen Gudang).
+			const fromWarehouse = !!(journal.rawMaterialIssueId || journal.rawMaterialReceiptId);
 			await trx.journalEntry.update({
 				where: { id: journalId },
-				data: { isPosted: false, status: 'DRAFT' },
+				data: { isPosted: false, status: fromWarehouse ? 'CONFIRMED' : 'DRAFT' },
 			});
 		});
 	}
