@@ -81,14 +81,19 @@ export class PostJurnalService {
 	}
 
 	async postJournalRevert(journalId: string, createJurnalEntryDto: CreateJurnalEntryDto, decoded: DecodeTokenType) {
-		// Jurnal Pengeluaran Barang (BPP): Revert di Jurnal = Revert pengeluaran di Gudang
+		// Jurnal Gudang: Revert di Jurnal = Revert dokumen di Gudang
 		// (stok & buku besar dibalik, jurnal berstatus CANCELLED sehingga langsung hilang dari daftar Jurnal).
-		const issueJournal = await this.prisma.journalEntry.findFirst({
+		const warehouseJournal = await this.prisma.journalEntry.findFirst({
 			where: { id: journalId, deletedAt: null },
-			select: { rawMaterialIssueId: true },
+			select: { rawMaterialIssueId: true, rawMaterialReceiptId: true },
 		});
-		if (issueJournal?.rawMaterialIssueId) {
-			return this.rawMaterialService.revertIssue(issueJournal.rawMaterialIssueId, decoded);
+		// BPP: Barang Material (Pengeluaran)
+		if (warehouseJournal?.rawMaterialIssueId) {
+			return this.rawMaterialService.revertIssue(warehouseJournal.rawMaterialIssueId, decoded);
+		}
+		// BPB: Barang Material (Penerimaan)
+		if (warehouseJournal?.rawMaterialReceiptId) {
+			return this.rawMaterialService.revertReceipt(warehouseJournal.rawMaterialReceiptId, decoded);
 		}
 
 		return this.prisma.$transaction(async (trx) => {
