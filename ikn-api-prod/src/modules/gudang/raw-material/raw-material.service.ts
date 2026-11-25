@@ -249,6 +249,13 @@ export class RawMaterialService {
 						},
 					},
 					items: true,
+					// Status jurnal terbaru: dipakai FE untuk menonaktifkan Revert saat jurnal sudah di-Revert dari menu Jurnal.
+					journalEntry: {
+						where: { deletedAt: null },
+						orderBy: { createdAt: 'desc' },
+						take: 1,
+						select: { id: true, isPosted: true, isRevert: true, status: true },
+					},
 				},
 				where: whereCondition,
 				orderBy: orderBy ?? { createdAt: 'desc' },
