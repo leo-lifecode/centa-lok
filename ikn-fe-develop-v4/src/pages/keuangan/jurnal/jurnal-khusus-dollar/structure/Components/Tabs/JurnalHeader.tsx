@@ -39,9 +39,6 @@ const getDeleteConfirmText = (record: any): string => {
   if (record?.rawMaterialReceiptId) {
     return base;
   }
-  if (record?.transactionId) {
-    return `${base} Jika jurnal berasal dari Uang Masuk Bank (Dollar), transaksi Uang Masuk terkait ikut dihapus.`;
-  }
   return base;
 };
 

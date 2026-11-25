@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException, Scope } from '@nest
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
-import { TransactionService } from '../transaction/transaction.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
 import { nowWIBString } from '@src/shared/utils/glolabalFunc';
 import dayjs from 'dayjs';
@@ -16,7 +15,6 @@ export class JurnalEntryService {
 		private readonly shareModuleService: ShareModuleService,
 		private readonly prisma: PrismaService,
 		private readonly rawMaterialService: RawMaterialService,
-		private readonly transactionService: TransactionService,
 	) {}
 
 	async createJournal(plus = 1) {
@@ -762,31 +760,6 @@ export class JurnalEntryService {
 				);
 			}
 			return this.rawMaterialService.revertIssue(issueJournal.rawMaterialIssueId, decoded);
-		}
-
-		// Jurnal Uang Masuk Bank (Rp & Dollar) dan Kas Keluar (Rp): hapus jurnal = hapus transaksi bank terkait (soft delete),
-		// baik yang dihapus jurnal utama maupun mirror. Invoice/PO tidak dibalik.
-		const linkedJournal = await this.prisma.journalEntry.findFirst({
-			where: { id, deletedAt: null },
-			select: { transactionId: true },
-		});
-
-		if (linkedJournal?.transactionId) {
-			const transaction = await this.prisma.cashBankTransaction.findFirst({
-				where: { id: linkedJournal.transactionId, deletedAt: null },
-				select: { type: true, currency: true, isMaterial: true },
-			});
-
-			// Rp: saldo Rp dikurangi. Dollar: saldo Rp & Dollar dikurangi + donePayment invoice ekspor dikurangi.
-			if (transaction?.type === 'CASH_IN' && (transaction.currency === 'RP' || transaction.currency === 'DOLLAR')) {
-				return this.transactionService.remove(linkedJournal.transactionId, { skipActionCheck: true });
-			}
-
-			// Kas Keluar (Rp) biasa: saldo bank dikembalikan. Kas Keluar Material (isMaterial = 'Y')
-			// punya aturan sendiri, jadi tidak ikut jalur ini.
-			if (transaction?.type === 'CASH_OUT' && transaction.currency === 'RP' && transaction.isMaterial !== 'Y') {
-				return this.transactionService.remove(linkedJournal.transactionId, { skipActionCheck: true });
-			}
 		}
 
 		return this.prisma.$transaction(async (tx) => {
