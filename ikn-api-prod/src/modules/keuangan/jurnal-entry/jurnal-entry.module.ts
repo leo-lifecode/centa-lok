@@ -8,6 +8,6 @@ import { JurnalEntryService } from './jurnal-entry.service';
 
 @Module({
 	controllers: [JurnalEntryController],
-	providers: [HelperGlobal, JurnalEntryService, ShareModuleService, RawMaterialService],
+	providers: [HelperGlobal, JurnalEntryService, ShareModuleService, RawMaterialService, TransactionService],
 })
 export class JurnalEntryModule {}
