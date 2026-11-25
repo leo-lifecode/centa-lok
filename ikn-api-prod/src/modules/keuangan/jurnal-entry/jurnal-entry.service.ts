@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, Scope } from '@nestjs/common';
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
-import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
 import { nowWIBString } from '@src/shared/utils/glolabalFunc';
 import dayjs from 'dayjs';
@@ -14,7 +13,6 @@ export class JurnalEntryService {
 	constructor(
 		private readonly shareModuleService: ShareModuleService,
 		private readonly prisma: PrismaService,
-		private readonly rawMaterialService: RawMaterialService,
 	) {}
 
 	async createJournal(plus = 1) {
@@ -745,23 +743,7 @@ export class JurnalEntryService {
 		}
 	}
 
-	async remove(id: string, decoded: DecodeTokenType) {
-		// Jurnal milik Pengeluaran Barang Mentah: hapus = Revert pengeluaran
-		// (stok & buku besar dibalik, jurnal berstatus CANCELLED sehingga tidak tampil lagi di menu Jurnal).
-		const issueJournal = await this.prisma.journalEntry.findFirst({
-			where: { id, deletedAt: null },
-			select: { isPosted: true, rawMaterialIssueId: true },
-		});
-
-		if (issueJournal?.rawMaterialIssueId) {
-			if (!issueJournal.isPosted) {
-				throw new BadRequestException(
-					'Jurnal ini milik Pengeluaran Barang Mentah. Hapus dari menu Gudang → Barang Material (Pengeluaran).',
-				);
-			}
-			return this.rawMaterialService.revertIssue(issueJournal.rawMaterialIssueId, decoded);
-		}
-
+	remove(id: string) {
 		return this.prisma.$transaction(async (tx) => {
 			// ---- SYARAT HAPUS: jurnal ada dan belum diposting (DRAFT atau sudah di-Revert) ----
 			const target = await tx.journalEntry.findFirst({

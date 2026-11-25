@@ -24,19 +24,6 @@ import * as JurnalUmumAxios from '@pages/keuangan/jurnal/jurnal-umum/service/Jur
 import { FilterDropdownProps } from 'antd/es/table/interface';
 const monthFormat = 'YYYY-MM';
 
-// Teks konfirmasi hapus sesuai asal jurnal.
-const getDeleteConfirmText = (record: any): string => {
-  const base = 'Apakah Anda yakin ingin menghapus data ini?';
-  if (record?.rawMaterialIssueId) {
-    return `${base} Jurnal ini dari Barang Material (Pengeluaran). Menghapus akan menjalankan Revert pengeluaran.`;
-  }
-  if (record?.rawMaterialReceiptId) {
-    return base;
-  }
-  return base;
-};
-
-
 import * as helperGlobal from '@/utils/helper';
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import Highlighter from 'react-highlight-words';
@@ -391,7 +378,7 @@ function JournalTable({
             />
 
             <Popconfirm
-              title={getDeleteConfirmText(record)}
+              title="Apakah Anda yakin ingin menghapus data ini?"
               okText="Ya"
               cancelText="Batal"
               onConfirm={() => handleDelete(record.id)} // Fungsi delete
@@ -399,8 +386,7 @@ function JournalTable({
               <Button
                 disabled={
                   record.isRevert === 'Y' ||
-                  // Jurnal BPP (Pengeluaran Barang) yang sudah diposting tetap bisa dihapus (= Revert pengeluaran)
-                  (record.isPosted && !record.rawMaterialIssueId) ||
+                  record.isPosted ||
                   !helperGlobal.hasAccessButton(acc, '/jurnal-khusus', 'delete')
                 }
                 type="primary"
