@@ -764,7 +764,7 @@ export class JurnalEntryService {
 			return this.rawMaterialService.revertIssue(issueJournal.rawMaterialIssueId, decoded);
 		}
 
-		// Jurnal Uang Masuk Bank (Rp): hapus jurnal = hapus transaksi bank terkait (soft delete),
+		// Jurnal Uang Masuk Bank (Rp & Dollar): hapus jurnal = hapus transaksi bank terkait (soft delete),
 		// baik yang dihapus jurnal utama maupun mirror. Invoice/PO tidak dibalik.
 		const linkedJournal = await this.prisma.journalEntry.findFirst({
 			where: { id, deletedAt: null },
@@ -777,7 +777,8 @@ export class JurnalEntryService {
 				select: { type: true, currency: true },
 			});
 
-			if (transaction?.type === 'CASH_IN' && transaction.currency === 'RP') {
+			// Rp: saldo Rp dikurangi. Dollar: saldo Rp & Dollar dikurangi + donePayment invoice ekspor dikurangi.
+			if (transaction?.type === 'CASH_IN' && (transaction.currency === 'RP' || transaction.currency === 'DOLLAR')) {
 				return this.transactionService.remove(linkedJournal.transactionId, { skipActionCheck: true });
 			}
 		}
