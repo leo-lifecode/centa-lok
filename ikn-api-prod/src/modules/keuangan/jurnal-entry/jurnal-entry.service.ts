@@ -162,6 +162,8 @@ export class JurnalEntryService {
 				skip,
 				take,
 				where: whereCondition,
+				// Tipe transaksi dipakai FE untuk teks konfirmasi hapus per tipe jurnal.
+				include: { transaction: { select: { type: true, currency: true, isMaterial: true } } },
 				orderBy: [{ isPosted: 'asc' }, { createdAt: 'desc' }],
 			}),
 			this.prisma.journalEntry.count({ where: whereCondition }),

@@ -28,6 +28,7 @@ import * as JurnalUmumAxios from '@pages/keuangan/jurnal/jurnal-umum/service/Jur
 import { FilterDropdownProps } from 'antd/es/table/interface';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useAccess } from '@/contexts/AccessContext';
+import { getDeleteJurnalConfirm } from '@pages/keuangan/jurnal/utils/deleteJurnalConfirm';
 const monthFormat = 'YYYY-MM';
 
 export interface JournalData {
@@ -356,7 +357,7 @@ function JournalTable({
             onClick={() => handleEdit(record.id)}
           />
           <Popconfirm
-            title="Apakah Anda yakin ingin menghapus data ini?"
+            {...getDeleteJurnalConfirm(record)}
             okText="Ya"
             cancelText="Batal"
             onConfirm={() => handleDelete(record.id)} // Fungsi delete

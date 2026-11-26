@@ -30,6 +30,7 @@ import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import Highlighter from 'react-highlight-words';
 import { handleMessageError } from '@/utils/func/func';
 import { useAccess } from '@/contexts/AccessContext';
+import { getDeleteJurnalConfirm } from '@pages/keuangan/jurnal/utils/deleteJurnalConfirm';
 export interface JournalData {
   id: string;
   spbId: string;
@@ -344,7 +345,7 @@ function JournalTable({
             onClick={() => handleEdit(record.id)}
           />
           <Popconfirm
-            title="Apakah Anda yakin ingin menghapus data ini?"
+            {...getDeleteJurnalConfirm(record)}
             okText="Ya"
             cancelText="Batal"
             onConfirm={() => handleDelete(record.id)} // Fungsi delete
