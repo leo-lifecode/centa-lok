@@ -7,6 +7,8 @@ import { ShareModuleService } from '@src/modules/share-module/share-module.servi
 import { CreateRawMaterialIssueDto } from './dto/create-raw-material-issue.dto';
 import { CreateRawMaterialDto } from './dto/create-raw-material.dto';
 import { GetMaterialDto } from './dto/get-raw-material.dto';
+import { nowWIBString } from '@src/shared/utils/glolabalFunc';
+import { randomUUID } from 'crypto';
 import { UpdateRawMaterialDto, UpdateRawMaterialIssueDto } from './dto/update-raw-material.dto';
 
 @Injectable({ scope: Scope.REQUEST })
@@ -2206,7 +2208,11 @@ export class RawMaterialService {
 				);
 
 				if (!journal) {
-					throw new NotFoundException('Jurnal penerimaan aktif yang sudah diposting tidak ditemukan');
+					throw new NotFoundException(
+						glDone
+							? 'Revert dulu jurnal penerimaan ini dari menu Jurnal Khusus Rp, baru bisa di-Revert di sini.'
+							: 'Jurnal penerimaan aktif yang sudah diposting tidak ditemukan',
+					);
 				}
 
 				// 3. Validasi periode akuntansi.
@@ -2597,15 +2603,34 @@ export class RawMaterialService {
 					}
 				}
 
-				// 10. Tandai jurnal sudah direvert.
-				await tx.journalEntry.update({
-					where: { id: journal.id },
-					data: {
-						isPosted: false,
-						isRevert: 'Y',
-						status: 'CANCELLED',
-					},
+				// 10. Soft delete jurnal penerimaan (deletedAt terisi, nomor jurnal diganti UUID agar bebas dipakai lagi).
+				// Posting ulang akan membuat jurnal baru dengan id baru.
+				const deletedAt = nowWIBString();
+				const childJournals = await tx.journalEntry.findMany({
+					where: { journalEntryId: journal.id, deletedAt: null },
+					select: { id: true },
 				});
+				const journalIds = [journal.id, ...childJournals.map((item) => item.id)];
+
+				await tx.journalAdjustmentSuggestion.deleteMany({
+					where: { journalEntryId: { in: journalIds } },
+				});
+				await tx.journalEntryDetail.updateMany({
+					where: { journalEntryId: { in: journalIds } },
+					data: { deletedAt },
+				});
+				for (const journalId of journalIds) {
+					await tx.journalEntry.update({
+						where: { id: journalId },
+						data: {
+							isPosted: false,
+							isRevert: 'Y',
+							status: 'CANCELLED',
+							numberJurnal: randomUUID(),
+							deletedAt,
+						},
+					});
+				}
 
 				// 11. Tandai dokumen REVERTED.
 				return tx.rawMaterialReceipt.update({
