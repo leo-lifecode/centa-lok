@@ -156,6 +156,22 @@ export const delCashOutFlowRawMaterial = async (id: string) => {
   }
 };
 
+export const postingCashOutFlowRawMaterial = async (id: string) => {
+  try {
+    const result = await api.post(
+      `/api/v1/keuangan/transaction/cash-out-flow-raw-material/${id}/posting`
+    );
+
+    if (![200, 201].includes(result.status)) {
+      throw new Error('Terjadi kesalahan');
+    }
+
+    return result.data.data;
+  } catch (e: any) {
+    ThrowError(e);
+  }
+};
+
 export const fetchDataUnit = async (params: ParamsType) => {
   const removeKeys = ['data', 'total'];
 

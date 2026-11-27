@@ -60,8 +60,7 @@ export class JurnalEntryController {
 
 	@Delete(':id')
 	@ApiBearerAuth() //+
-	remove(@Req() req: Request, @Param('id') id: string) {
-		const decoded = this.helperGlobal.decodeJwt(req);
-		return this.jurnalEntryService.remove(id, decoded);
+	remove(@Param('id') id: string) {
+		return this.jurnalEntryService.remove(id);
 	}
 }

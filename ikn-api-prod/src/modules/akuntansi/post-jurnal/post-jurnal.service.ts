@@ -137,13 +137,9 @@ export class PostJurnalService {
 			// });
 
 			// Mark journal as posted
-			// Jurnal dari Gudang (BPP/BPB): status tetap CONFIRMED (isPosted=false) sebagai penanda
-			// "pernah diposting dari Gudang" -> tetap tampil di Jurnal, tombol Gudang tetap nonaktif
-			// sampai jurnal dihapus (Hapus = revert stok & dokumen Gudang).
-			const fromWarehouse = !!(journal.rawMaterialIssueId || journal.rawMaterialReceiptId);
 			await trx.journalEntry.update({
 				where: { id: journalId },
-				data: { isPosted: false, status: fromWarehouse ? 'CONFIRMED' : 'DRAFT' },
+				data: { isPosted: false, status: 'DRAFT' },
 			});
 		});
 	}

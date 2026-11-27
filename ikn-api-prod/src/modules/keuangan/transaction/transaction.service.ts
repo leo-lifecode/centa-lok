@@ -429,6 +429,180 @@ export class TransactionService {
 		);
 	}
 
+	// =====================================================
+	// POSTING UANG MASUK BANK (RP)
+	// Membuat ulang jurnal yang sudah dihapus
+	// Mengikuti struktur jurnal pada create()
+	// =====================================================
+	async postingCashInFlow(id: string, decoded: DecodeTokenType) {
+		return this.prisma.$transaction(
+			async (tx) => {
+				// 1. Ambil transaksi Uang Masuk Bank (Rp).
+				const transaction = await tx.cashBankTransaction.findFirst({
+					where: {
+						id,
+						deletedAt: null,
+						type: 'CASH_IN',
+						currency: 'RP',
+					},
+					include: {
+						bank_account: {
+							include: {
+								account: true,
+							},
+						},
+						cashBankTransactionDetails: {
+							where: {
+								deletedAt: null,
+							},
+							orderBy: {
+								createdAt: 'asc',
+							},
+						},
+					},
+				});
+
+				if (!transaction) {
+					throw new NotFoundException('Transaksi Uang Masuk Bank (Rp) tidak ditemukan.');
+				}
+
+				// 2. Pastikan belum ada jurnal aktif.
+				const existingJournal = await tx.journalEntry.findFirst({
+					where: {
+						transactionId: id,
+						deletedAt: null,
+					},
+				});
+
+				if (existingJournal) {
+					throw new BadRequestException('Transaksi ini sudah memiliki jurnal aktif.');
+				}
+
+				const bankAccount = transaction.bank_account;
+
+				if (!bankAccount) {
+					throw new NotFoundException('Rekening bank transaksi tidak ditemukan.');
+				}
+
+				// 3. Ambil akun pendapatan sesuai pola create().
+				const incomeAccount = await tx.account.findFirst({
+					where: {
+						code: bankAccount.accountCode,
+					},
+				});
+
+				if (!incomeAccount) {
+					throw new NotFoundException('Income account not found');
+				}
+
+				const amount = Number(transaction.amountInIDR || 0);
+				const isDifferentUnit = transaction.unitId !== bankAccount.unitId;
+				const isManual = !transaction.invoiceId;
+
+				// 4. Ambil nomor jurnal utama.
+				const numberJurnal = await this.createJournal();
+
+				// 5. Susun detail jurnal utama sesuai create().
+				const dataJurnalDetails = transaction.cashBankTransactionDetails
+					.filter((item) => item.accountCode !== null)
+					.map((item) => ({
+						accountCode: item.accountCode,
+						unitId: bankAccount.unitId,
+						credit: item.credit,
+						debit: item.debit,
+						description: item.keterangan,
+					}));
+
+				// 6. Buat jurnal utama.
+				const mainJournal = await tx.journalEntry.create({
+					data: {
+						module: 'SALES',
+						date: transaction.date,
+						description: transaction.description === '-' ? 'Penerimaan Kas' : transaction.description,
+						purposeTransaction: transaction.description || '-',
+						referenceNumber: transaction.transactionNumber,
+						numberJurnal,
+						unitId: bankAccount.unitId,
+						createdBy: 'System',
+						staffId: transaction.staffId || decoded.id,
+						transactionId: transaction.id,
+						typeJournalEntry: transaction.typeTransaction,
+						totalBalance: amount,
+						details: {
+							create: [
+								{
+									accountCode: incomeAccount.code,
+									debit: amount,
+									unitId: bankAccount.unitId,
+									credit: 0,
+									description: incomeAccount.name,
+								},
+								...dataJurnalDetails,
+							],
+						},
+					},
+				});
+
+				// 7. Buat jurnal mirror jika unit transaksi berbeda
+				// dengan unit rekening bank.
+				let mirrorJournal = null;
+
+				if (isDifferentUnit) {
+					const numberJurnalMirror = await this.createJournal(2);
+
+					mirrorJournal = await tx.journalEntry.create({
+						data: {
+							module: 'SALES',
+							date: transaction.date,
+							description: isManual ? 'Mirror TMP: penerimaan kas via Pusat' : 'Mirror TMP: pelunasan piutang via Pusat',
+							referenceNumber: transaction.transactionNumber,
+							purposeTransaction: transaction.description || '-',
+							numberJurnal: numberJurnalMirror,
+							createdBy: 'System',
+							staffId: transaction.staffId || decoded.id,
+							transactionId: transaction.id,
+							unitId: transaction.unitId,
+							is_intercompany: true,
+							typeJournalEntry: transaction.typeTransaction,
+							intercompanyReference: numberJurnal,
+							totalBalance: amount,
+							details: {
+								create: [
+									{
+										accountCode: '8888',
+										debit: amount,
+										unitId: transaction.unitId,
+										credit: 0,
+										description: 'Sesuaikan Akun',
+									},
+									{
+										accountCode: '8888',
+										debit: 0,
+										unitId: transaction.unitId,
+										credit: amount,
+										description: 'Sesuaikan Akun',
+									},
+								],
+							},
+						},
+					});
+				}
+
+				return {
+					transactionId: transaction.id,
+					journalId: mainJournal.id,
+					journalNumber: mainJournal.numberJurnal,
+					mirrorJournalId: mirrorJournal?.id ?? null,
+					mirrorJournalNumber: mirrorJournal?.numberJurnal ?? null,
+				};
+			},
+			{
+				maxWait: 10000,
+				timeout: 20000,
+			},
+		);
+	}
+
 	async createDollar(createTransactionDto: CreateTransactionDto, decoded: DecodeTokenType) {
 		// Validasi bank account dan akun kas
 		const bankAccount = await this.prisma.bankAccount.findUnique({
@@ -762,6 +936,175 @@ export class TransactionService {
 			{
 				maxWait: 10000,
 				timeout: 15000,
+			},
+		);
+	}
+
+	// =====================================================
+	// POSTING UANG MASUK BANK (DOLLAR)
+	// Membuat ulang jurnal yang sudah dihapus
+	// Mengikuti struktur jurnal pada createDollar()
+	// =====================================================
+	async postingCashInFlowDollar(id: string, decoded: DecodeTokenType) {
+		return this.prisma.$transaction(
+			async (tx) => {
+				// 1. Ambil transaksi Uang Masuk Bank Dollar.
+				const transaction = await tx.cashBankTransaction.findFirst({
+					where: {
+						id,
+						deletedAt: null,
+						type: 'CASH_IN',
+						currency: 'DOLLAR',
+					},
+					include: {
+						bank_account: {
+							include: {
+								account: true,
+							},
+						},
+						cashBankTransactionDetails: {
+							where: {
+								deletedAt: null,
+							},
+							orderBy: {
+								createdAt: 'asc',
+							},
+						},
+					},
+				});
+
+				if (!transaction) {
+					throw new NotFoundException('Transaksi Uang Masuk Bank (Dollar) tidak ditemukan.');
+				}
+
+				// 2. Pastikan belum ada jurnal aktif.
+				const existingJournal = await tx.journalEntry.findFirst({
+					where: {
+						transactionId: id,
+						deletedAt: null,
+					},
+				});
+
+				if (existingJournal) {
+					throw new BadRequestException('Transaksi ini sudah memiliki jurnal aktif.');
+				}
+
+				const bankAccount = transaction.bank_account;
+
+				if (!bankAccount) {
+					throw new NotFoundException('Rekening bank transaksi tidak ditemukan.');
+				}
+
+				// 3. Ambil detail transaksi Dollar.
+				const transactionDetails = transaction.cashBankTransactionDetails.filter((item) => item.accountCode !== null);
+
+				if (transactionDetails.length === 0) {
+					throw new BadRequestException('Detail transaksi Dollar tidak ditemukan.');
+				}
+
+				// Nominal Dollar dan Rupiah yang benar-benar diterima.
+				const amountDollar = Number(transaction.amountOriginal || 0);
+				const amountIDR = Number(transaction.amountInIDR || 0);
+				const exchangeRate = Number(transaction.exchangeRate || 0);
+
+				if (amountDollar <= 0 || amountIDR <= 0) {
+					throw new BadRequestException('Nominal transaksi Dollar atau Rupiah tidak valid.');
+				}
+
+				const isDifferentUnit = transaction.unitId !== bankAccount.unitId;
+				const isManual = !transaction.invoiceEksporId;
+
+				// 4. Buat nomor jurnal utama.
+				const numberJurnal = await this.createJournal();
+
+				// 5. Susun detail jurnal Dollar.
+				const dataJurnalDetails = transactionDetails.map((item) => ({
+					accountCode: item.accountCode,
+					unitId: bankAccount.unitId,
+					debitDollar: item.debit,
+					creditDollar: item.credit,
+					description: item.keterangan,
+				}));
+
+				// 6. Buat jurnal utama.
+				const mainJournal = await tx.journalEntry.create({
+					data: {
+						module: 'SALES',
+						date: transaction.date,
+						description: transaction.description === '-' ? 'Penerimaan Kas' : transaction.description,
+						purposeTransaction: transaction.description || '-',
+						referenceNumber: transaction.transactionNumber,
+						numberJurnal,
+						createdBy: 'System',
+						staffId: transaction.staffId || decoded.id,
+						unitId: bankAccount.unitId,
+						transactionId: transaction.id,
+						typeJournalEntry: 'RN_EKSPOR',
+						currencyValue: exchangeRate,
+						totalBalance: amountIDR,
+						totalBalanceUs: amountDollar,
+						details: {
+							create: dataJurnalDetails,
+						},
+					},
+				});
+
+				// 7. Buat jurnal mirror jika unit berbeda.
+				let mirrorJournal = null;
+
+				if (isDifferentUnit) {
+					const numberJurnalMirror = await this.createJournal(2);
+
+					mirrorJournal = await tx.journalEntry.create({
+						data: {
+							module: 'SALES',
+							date: transaction.date,
+							description: isManual ? 'Mirror TMP: penerimaan kas via Pusat' : 'Mirror TMP: pelunasan piutang via Pusat',
+							referenceNumber: transaction.transactionNumber,
+							numberJurnal: numberJurnalMirror,
+							createdBy: 'System',
+							staffId: transaction.staffId || decoded.id,
+							unitId: transaction.unitId,
+							is_intercompany: true,
+							typeJournalEntry: 'RN_EKSPOR',
+							transactionId: transaction.id,
+							intercompanyReference: numberJurnal,
+							currencyValue: exchangeRate,
+							totalBalanceUs: amountDollar,
+							totalBalance: amountIDR,
+							details: {
+								create: [
+									{
+										accountCode: '8888',
+										debitDollar: amountDollar,
+										unitId: transaction.unitId,
+										creditDollar: 0,
+										description: 'Sesuaikan Akun',
+									},
+									{
+										accountCode: '8888',
+										debitDollar: 0,
+										unitId: transaction.unitId,
+										creditDollar: amountDollar,
+										description: 'Sesuaikan Akun',
+									},
+								],
+							},
+						},
+					});
+				}
+
+				return {
+					transactionId: transaction.id,
+					journalId: mainJournal.id,
+					journalNumber: mainJournal.numberJurnal,
+					mirrorJournalId: mirrorJournal?.id ?? null,
+					mirrorJournalNumber: mirrorJournal?.numberJurnal ?? null,
+				};
+			},
+			{
+				maxWait: 10000,
+				timeout: 20000,
 			},
 		);
 	}
@@ -1629,6 +1972,328 @@ export class TransactionService {
 		});
 	}
 
+	// =====================================================
+	// POSTING KAS KELUAR (RP)
+	// Mengikuti struktur jurnal createCashOutFLow()
+	// =====================================================
+	async postingCashOutFlow(id: string, decoded: DecodeTokenType) {
+		return this.prisma.$transaction(async (tx) => {
+			// 1. Ambil transaksi Kas Keluar (Rp), bukan Kas Keluar Material.
+			const transaction = await tx.cashBankTransaction.findFirst({
+				where: {
+					id,
+					deletedAt: null,
+					type: 'CASH_OUT',
+					currency: 'RP',
+					isMaterial: 'N',
+				},
+				include: {
+					bank_account: {
+						include: {
+							account: true,
+						},
+					},
+					cashBankTransactionDetails: {
+						where: {
+							deletedAt: null,
+						},
+						orderBy: {
+							createdAt: 'asc',
+						},
+					},
+				},
+			});
+
+			if (!transaction) {
+				throw new NotFoundException('Transaksi Kas Keluar (Rp) tidak ditemukan.');
+			}
+
+			// 2. Cegah pembuatan jurnal jika masih ada jurnal aktif.
+			const existingJournal = await tx.journalEntry.findFirst({
+				where: {
+					transactionId: id,
+					deletedAt: null,
+				},
+			});
+
+			if (existingJournal) {
+				throw new BadRequestException('Transaksi ini sudah memiliki jurnal aktif.');
+			}
+
+			const bankAccount = transaction.bank_account;
+
+			if (!bankAccount) {
+				throw new NotFoundException('Rekening bank transaksi tidak ditemukan.');
+			}
+
+			const amount = Number(transaction.amountInIDR || 0);
+			const isSameUnit = bankAccount.unitId === transaction.unitId;
+
+			// 3. Ambil detail transaksi.
+			let transactionDetails = transaction.cashBankTransactionDetails;
+
+			// Saat create beda unit, detail transaksi sudah menyimpan
+			// satu baris rekening bank secara otomatis.
+			// Baris tersebut tidak boleh diproses sebagai detail akun lagi.
+			if (!isSameUnit) {
+				const bankDetailIndex = transactionDetails.findIndex(
+					(item) =>
+						item.accountCode === bankAccount.accountCode && Number(item.debit || 0) === 0 && Number(item.credit || 0) === amount,
+				);
+
+				if (bankDetailIndex !== -1) {
+					transactionDetails = transactionDetails.filter((_, index) => index !== bankDetailIndex);
+				}
+			}
+
+			const numberJurnal = await this.createJournal();
+
+			// 4. Susun detail jurnal utama sesuai pola create.
+			const dataJurnalDetails = transactionDetails.map((item) => ({
+				accountCode: isSameUnit ? item.accountCode : '8888',
+				unitId: bankAccount.unitId,
+				credit: item.credit,
+				debit: item.debit,
+				description: item.keterangan,
+			}));
+
+			// 5. Buat jurnal utama.
+			const mainJournal = await tx.journalEntry.create({
+				data: {
+					module: 'FINANCE',
+					date: transaction.date,
+					description: transaction.to,
+					purposeTransaction: transaction.to,
+					referenceNumber: transaction.transactionNumber,
+					numberJurnal,
+					createdBy: 'System',
+					staffId: transaction.staffId || decoded.id,
+					transactionId: transaction.id,
+					unitId: bankAccount.unitId,
+					totalBalance: amount,
+					details: {
+						create: [
+							{
+								accountCode: bankAccount.accountCode,
+								unitId: bankAccount.unitId,
+								debit: 0,
+								credit: amount,
+								isTmp: !isSameUnit,
+								description: transaction.description,
+							},
+							...dataJurnalDetails,
+						],
+					},
+				},
+			});
+
+			// 6. Jika beda unit, buat jurnal mirror sesuai pola createCashOutFLow.
+			let mirrorJournal = null;
+
+			if (!isSameUnit) {
+				const numberJurnalMirror = await this.createJournal(2);
+
+				const dataJurnalDetailsMirror = transactionDetails.map((item) => ({
+					accountCode: item.accountCode,
+					unitId: transaction.unitId,
+					credit: item.credit,
+					debit: item.debit,
+					description: item.keterangan,
+				}));
+
+				mirrorJournal = await tx.journalEntry.create({
+					data: {
+						module: 'SALES',
+						date: transaction.date,
+						description: `Mirror TMP: piutang via Pusat - ${transaction.to}`,
+						purposeTransaction: transaction.to,
+						referenceNumber: transaction.transactionNumber,
+						numberJurnal: numberJurnalMirror,
+						createdBy: 'System',
+						staffId: transaction.staffId || decoded.id,
+						transactionId: transaction.id,
+						unitId: transaction.unitId,
+						is_intercompany: true,
+						intercompanyReference: numberJurnal,
+						totalBalance: amount,
+						details: {
+							create: [
+								{
+									accountCode: '8888',
+									unitId: transaction.unitId,
+									debit: 0,
+									debitDollar: 0,
+									creditDollar: 0,
+									credit: amount,
+									description: 'Sesuaikan Akun',
+								},
+								...dataJurnalDetailsMirror,
+							],
+						},
+					},
+				});
+			}
+
+			return {
+				transactionId: transaction.id,
+				journalId: mainJournal.id,
+				journalNumber: mainJournal.numberJurnal,
+				mirrorJournalId: mirrorJournal?.id ?? null,
+				mirrorJournalNumber: mirrorJournal?.numberJurnal ?? null,
+			};
+		});
+	}
+
+	// =====================================================
+	// POSTING KAS KELUAR MATERIAL (RP)
+	// =====================================================
+	async postingCashOutFlowRawMaterial(id: string, decoded: DecodeTokenType) {
+		return this.prisma.$transaction(async (tx) => {
+			// Ambil transaksi beserta detail dan rekening bank.
+			const transaction = await tx.cashBankTransaction.findFirst({
+				where: {
+					id,
+					deletedAt: null,
+					type: 'CASH_OUT',
+					currency: 'RP',
+					isMaterial: 'Y',
+				},
+				include: {
+					bank_account: {
+						include: {
+							account: true,
+						},
+					},
+					cashBankTransactionDetails: {
+						where: {
+							deletedAt: null,
+						},
+						orderBy: {
+							createdAt: 'asc',
+						},
+					},
+				},
+			});
+
+			if (!transaction) {
+				throw new NotFoundException('Transaksi Kas Keluar Material (Rp) tidak ditemukan.');
+			}
+
+			// Pastikan jurnal aktif belum pernah dibuat.
+			const existingJournal = await tx.journalEntry.findFirst({
+				where: {
+					transactionId: id,
+					deletedAt: null,
+				},
+			});
+
+			if (existingJournal) {
+				throw new BadRequestException('Transaksi ini sudah memiliki jurnal aktif.');
+			}
+
+			const bankAccount = transaction.bank_account;
+
+			if (!bankAccount) {
+				throw new NotFoundException('Rekening bank transaksi tidak ditemukan.');
+			}
+
+			const pembayaranSekarang = Number(transaction.amountInIDR || 0);
+
+			// Ambil nomor jurnal utama.
+			const numberJurnal = await this.createJournal();
+
+			// Susun detail jurnal sesuai aturan saat create.
+			const dataJurnalDetails = transaction.cashBankTransactionDetails.map((item) => ({
+				accountCode: item.accountCode,
+				unitId: bankAccount.unitId,
+				description: item.keterangan,
+				debit: item.debit,
+				credit: item.credit,
+			}));
+
+			// Buat jurnal utama.
+			const mainJournal = await tx.journalEntry.create({
+				data: {
+					module: 'FINANCE',
+					date: transaction.date,
+					description: transaction.description || transaction.to,
+					purposeTransaction: transaction.to,
+					referenceNumber: transaction.transactionNumber,
+					numberJurnal,
+					createdBy: 'System',
+					staffId: transaction.staffId || decoded.id,
+					transactionId: transaction.id,
+					unitId: bankAccount.unitId,
+					totalBalance: pembayaranSekarang,
+
+					details: {
+						create: [
+							{
+								accountCode: bankAccount.accountCode,
+								description: bankAccount.account?.name,
+								unitId: bankAccount.unitId,
+								debit: 0,
+								credit: pembayaranSekarang,
+							},
+							...dataJurnalDetails,
+						],
+					},
+				},
+			});
+
+			// Buat jurnal mirror jika unit rekening bank berbeda dengan unit transaksi.
+			let mirrorJournal = null;
+
+			if (bankAccount.unitId !== transaction.unitId) {
+				const numberJurnalMirror = await this.createJournal(2);
+
+				mirrorJournal = await tx.journalEntry.create({
+					data: {
+						module: 'SALES',
+						date: transaction.date,
+						description: transaction.description || transaction.to,
+						purposeTransaction: transaction.to,
+						referenceNumber: transaction.transactionNumber,
+						numberJurnal: numberJurnalMirror,
+						createdBy: 'System',
+						staffId: transaction.staffId || decoded.id,
+						transactionId: transaction.id,
+						unitId: transaction.unitId,
+						is_intercompany: true,
+						intercompanyReference: numberJurnal,
+						totalBalance: pembayaranSekarang,
+
+						details: {
+							create: [
+								{
+									accountCode: bankAccount.accountCode,
+									description: bankAccount.account?.name,
+									unitId: transaction.unitId,
+									credit: pembayaranSekarang,
+									debit: 0,
+								},
+								...transaction.cashBankTransactionDetails.map((item) => ({
+									accountCode: item.accountCode,
+									description: item.keterangan,
+									unitId: transaction.unitId,
+									credit: item.credit,
+									debit: item.debit,
+								})),
+							],
+						},
+					},
+				});
+			}
+
+			return {
+				message: 'Posting jurnal Kas Keluar Material (Rp) berhasil.',
+				transactionId: transaction.id,
+				journal: mainJournal,
+				mirrorJournal,
+			};
+		});
+	}
+
 	async findAll(query: GetTransactionDto, decoded: DecodeTokenType) {
 		const {
 			page = 1,
@@ -1729,6 +2394,9 @@ export class TransactionService {
 
 					// Ambil status jurnal yang terhubung dengan transaksi
 					journalEntry: {
+						where: {
+							deletedAt: null,
+						},
 						select: {
 							id: true,
 							isPosted: true,
@@ -3593,309 +4261,320 @@ export class TransactionService {
 
 	async updateCashOutFlow(id: string, dto: CreateCashOutFlowDto, decoded: DecodeTokenType) {
 		try {
-			return this.prisma.$transaction(async (tx) => {
-				const existing = await tx.cashBankTransaction.findFirstOrThrow({
-					where: { id },
-					include: {
-						journalEntry: { include: { details: true } },
-						cashBankTransactionDetails: true,
-					},
-				});
-
-				const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
-				const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
-				const wasIntercompany = !!mirrorJournal;
-
-				if (!mainJournal) {
-					throw new BadRequestException('Jurnal utama tidak ditemukan.');
-				}
-
-				if (mainJournal.isPosted) {
-					throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
-				}
-
-				if (mirrorJournal && mirrorJournal.isPosted) {
-					throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
-				}
-
-				const bankAccount = await tx.bankAccount.findFirstOrThrow({
-					where: { id: dto.bank_account_id },
-					include: { account: true },
-				});
-
-				const isNowIntercompany = bankAccount.unitId !== dto.unitId;
-
-				// Kembalikan saldo bank lama
-				await tx.bankAccount.update({
-					where: { id: existing.bank_account_id },
-					data: { currentBalance: { increment: existing.amountInIDR } },
-				});
-				// Kurangi saldo bank baru
-				await tx.bankAccount.update({
-					where: { id: dto.bank_account_id },
-					data: { currentBalance: { decrement: dto.amount } },
-				});
-
-				// Hapus details transaksi lama
-				await tx.cashBankTransactionDetails.deleteMany({
-					where: { cashBankTransactionId: id },
-				});
-				const isIntercompany = !this.isSameUnit(dto.unitId, bankAccount.unitId);
-
-				let newJournalDetailsMain = [];
-				let newJournalDetailsMirror = [];
-				await tx.journalEntryDetail.deleteMany({ where: { journalEntryId: mainJournal.id } });
-
-				if (mirrorJournal) {
-					await tx.journalEntryDetail.deleteMany({ where: { journalEntryId: mirrorJournal.id } });
-				}
-				if (mirrorJournal) {
-					await tx.journalAdjustmentSuggestion.deleteMany({
-						where: { journalEntryId: mirrorJournal.id, status: 'PENDING' },
-					});
-				}
-				if (mainJournal) {
-					await tx.journalAdjustmentSuggestion.deleteMany({
-						where: { journalEntryId: mainJournal.id, status: 'PENDING' },
-					});
-				}
-
-				const numberJurnal = await this.createJournal();
-				const numberJurnalMirror = await this.createJournal(2);
-				await tx.journalEntry.deleteMany({ where: { transactionId: id } });
-
-				let journalId = null;
-				let mirrorJournalId = null;
-
-				// ── CASE 1: create pusat -> edit pusat ────────────────────────────
-				if (existing.unitId === bankAccount.unitId && existing.unitId === dto.unitId) {
-					journalId = await tx.journalEntry.create({
-						data: {
-							module: 'FINANCE',
-							date: dto.date,
-							description: dto.to,
-							purposeTransaction: dto.to,
-							referenceNumber: dto.transactionNumber,
-							numberJurnal: numberJurnal,
-							createdBy: 'System',
-							staffId: decoded.id,
-							unitId: bankAccount.unitId,
-							transactionId: id,
-							totalBalance: dto.amount,
-							details: {
-								create: buildJournalDetails(dto, bankAccount, true),
-							},
+			return this.prisma.$transaction(
+				async (tx) => {
+					const existing = await tx.cashBankTransaction.findFirstOrThrow({
+						where: { id },
+						include: {
+							journalEntry: { include: { details: true } },
+							cashBankTransactionDetails: true,
 						},
 					});
-					newJournalDetailsMain = buildJournalDetails(dto, bankAccount, true);
-				}
 
-				// ── CASE 2: create beda unit → edit beda unit ────────────────────────────
-				else if (existing.unitId !== bankAccount.unitId && bankAccount.unitId !== dto.unitId) {
-					journalId = await tx.journalEntry.create({
-						data: {
-							module: 'FINANCE',
-							date: dto.date,
-							description: dto.to,
-							purposeTransaction: dto.to,
-							referenceNumber: dto.transactionNumber,
-							numberJurnal: numberJurnal,
-							createdBy: 'System',
-							staffId: decoded.id,
-							unitId: bankAccount.unitId,
-							transactionId: id,
-							totalBalance: dto.amount,
-							details: {
-								create: buildJournalDetails(dto, bankAccount, true),
-							},
-						},
+					const mainJournal = existing.journalEntry.find((j) => !j.is_intercompany);
+					const mirrorJournal = existing.journalEntry.find((j) => j.is_intercompany);
+					const wasIntercompany = !!mirrorJournal;
+
+					if (!mainJournal) {
+						throw new BadRequestException('Jurnal utama tidak ditemukan.');
+					}
+
+					if (mainJournal.isPosted) {
+						throw new BadRequestException('Jurnal utama sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+					}
+
+					if (mirrorJournal && mirrorJournal.isPosted) {
+						throw new BadRequestException('Jurnal mirror unit sudah terpost, tidak dapat diubah. Revert dulu (Jurnal Khusus).');
+					}
+
+					const bankAccount = await tx.bankAccount.findFirstOrThrow({
+						where: { id: dto.bank_account_id },
+						include: { account: true },
 					});
-					newJournalDetailsMain = buildJournalDetails(dto, bankAccount, false);
-					mirrorJournalId = await tx.journalEntry.create({
-						data: {
-							module: 'SALES',
-							date: dto.date,
-							description: `Mirror TMP: piutang via Pusat - ${dto.to}`,
-							purposeTransaction: dto.to,
-							referenceNumber: dto.transactionNumber,
-							numberJurnal: numberJurnalMirror,
-							createdBy: 'System',
-							staffId: decoded.id,
-							transactionId: id,
-							unitId: dto.unitId,
-							is_intercompany: true,
-							intercompanyReference: numberJurnal,
-							totalBalance: dto.amount,
-							details: {
-								create: buildMirrorDetails(dto),
-							},
-						},
+
+					const isNowIntercompany = bankAccount.unitId !== dto.unitId;
+
+					// Kembalikan saldo bank lama
+					await tx.bankAccount.update({
+						where: { id: existing.bank_account_id },
+						data: { currentBalance: { increment: existing.amountInIDR } },
 					});
-					newJournalDetailsMirror = buildMirrorDetails(dto);
-				}
-
-				// ── CASE 3: create pusat → edit beda unit ────────────────────────────
-				else if (existing.unitId === bankAccount.unitId && bankAccount.unitId !== dto.unitId) {
-					journalId = await tx.journalEntry.create({
-						data: {
-							module: 'FINANCE',
-							date: dto.date,
-							description: dto.to,
-							purposeTransaction: dto.to,
-							referenceNumber: dto.transactionNumber,
-							transactionId: id,
-							numberJurnal: numberJurnal,
-							createdBy: 'System',
-							staffId: decoded.id,
-							unitId: bankAccount.unitId,
-							totalBalance: dto.amount,
-							details: {
-								create: buildJournalDetails(dto, bankAccount, true),
-							},
-						},
+					// Kurangi saldo bank baru
+					await tx.bankAccount.update({
+						where: { id: dto.bank_account_id },
+						data: { currentBalance: { decrement: dto.amount } },
 					});
-					newJournalDetailsMain = buildJournalDetails(dto, bankAccount, false);
-					mirrorJournalId = await tx.journalEntry.create({
-						data: {
-							module: 'SALES',
-							date: dto.date,
-							description: `Mirror TMP: piutang via Pusat - ${dto.to}`,
-							purposeTransaction: dto.to,
-							referenceNumber: existing.transactionNumber,
-							numberJurnal: numberJurnalMirror,
-							createdBy: 'System',
-							staffId: decoded.id,
-							transactionId: id,
-							unitId: dto.unitId,
-							is_intercompany: true,
-							intercompanyReference: journalId.numberJurnal,
-							totalBalance: dto.amount,
-							details: {
-								create: buildMirrorDetails(dto),
-							},
-						},
+
+					// Hapus details transaksi lama
+					await tx.cashBankTransactionDetails.deleteMany({
+						where: { cashBankTransactionId: id },
 					});
-					newJournalDetailsMirror = buildMirrorDetails(dto);
-				}
+					const isIntercompany = !this.isSameUnit(dto.unitId, bankAccount.unitId);
 
-				// ── CASE 4: create beda unit → edit pusat ────────────────────────────
-				else if (existing.unitId !== bankAccount.unitId && bankAccount.unitId === dto.unitId) {
-					journalId = await tx.journalEntry.create({
-						data: {
-							module: 'FINANCE',
-							date: dto.date,
-							description: dto.to,
-							purposeTransaction: dto.to,
-							referenceNumber: dto.transactionNumber,
-							numberJurnal: numberJurnal,
-							createdBy: 'System',
-							staffId: decoded.id,
-							unitId: bankAccount.unitId,
-							transactionId: id,
-							totalBalance: dto.amount,
-							details: {
-								create: buildJournalDetails(dto, bankAccount, true),
+					let newJournalDetailsMain = [];
+					let newJournalDetailsMirror = [];
+
+					// Hapus detail dari SEMUA jurnal yang terhubung ke transaksi ini
+					for (const journal of existing.journalEntry) {
+						await tx.journalEntryDetail.deleteMany({
+							where: {
+								journalEntryId: journal.id,
 							},
-						},
-					});
-					newJournalDetailsMain = buildJournalDetails(dto, bankAccount, true);
-				}
+						});
+					}
 
-				// ─── 6. Hitung diff details untuk ditampilkan ke user ─────
-				// const newJournalDetailsMain = [
-				// 	{ accountCode: bankAccount.accountCode, debit: dto.amount || 0, unitId: bankAccount.unitId, credit: 0 },
-				// 	{ accountCode: INTERCOMPANY_CODE, debit: 0, unitId: bankAccount.unitId, credit: dto.amount || 0 },
-				// ];
-				const detailChanges = this.computeJournalDiff(mainJournal, newJournalDetailsMain);
-				const mirrorChanges = this.computeJournalDiff(mirrorJournal, newJournalDetailsMirror);
+					if (mirrorJournal) {
+						await tx.journalAdjustmentSuggestion.deleteMany({
+							where: { journalEntryId: mirrorJournal.id, status: 'PENDING' },
+						});
+					}
+					if (mainJournal) {
+						await tx.journalAdjustmentSuggestion.deleteMany({
+							where: { journalEntryId: mainJournal.id, status: 'PENDING' },
+						});
+					}
 
-				// const mirrorChanges = this.computeMirrorDiff({ wasIntercompany, isIntercompany, mirrorJournal, dto });
-				// const allChanges = [...detailChanges, ...mirrorChanges];
-				const allChanges = detailChanges;
+					const numberJurnal = await this.createJournal();
+					const numberJurnalMirror = await this.createJournal(2);
+					await tx.journalEntry.deleteMany({ where: { transactionId: id } });
 
-				// ─── 7. Simpan pending suggestion (hanya details) ─────────
-				if (allChanges.length > 0) {
-					await tx.journalAdjustmentSuggestion.create({
-						data: {
-							journalEntryId: journalId.id,
-							transactionId: id,
-							status: 'PENDING',
-							changes: {
-								fields: allChanges,
-								snapshot: {
-									isIntercompany,
-									wasIntercompany,
-									newJournalDetailsMain,
-									unitId: bankAccount.unitId,
-									bankUnitId: bankAccount.unitId,
-									amount: dto.amount,
-									jumlahBayar: dto.jumlahBayar,
-									date: dto.date,
-									description: dto.description,
-									transactionNumber: dto.transactionNumber,
-									mirrorJournalId: mirrorJournal?.id ?? null,
+					let journalId = null;
+					let mirrorJournalId = null;
+
+					// ── CASE 1: create pusat -> edit pusat ────────────────────────────
+					if (existing.unitId === bankAccount.unitId && existing.unitId === dto.unitId) {
+						journalId = await tx.journalEntry.create({
+							data: {
+								module: 'FINANCE',
+								date: dto.date,
+								description: dto.to,
+								purposeTransaction: dto.to,
+								referenceNumber: dto.transactionNumber,
+								numberJurnal: numberJurnal,
+								createdBy: 'System',
+								staffId: decoded.id,
+								unitId: bankAccount.unitId,
+								transactionId: id,
+								totalBalance: dto.amount,
+								details: {
+									create: buildJournalDetails(dto, bankAccount, true),
 								},
-							} as any,
-						},
-					});
-				}
-				// ─── 7. Simpan pending suggestion (hanya details) ─────────
-				if (mirrorJournal && mirrorChanges.length > 0 && dto.unitId !== bankAccount.unitId) {
-					await tx.journalAdjustmentSuggestion.create({
-						data: {
-							journalEntryId: mirrorJournalId.id,
-							transactionId: id,
-							status: 'PENDING',
-							changes: {
-								fields: mirrorChanges,
-								snapshot: {
-									isIntercompany,
-									wasIntercompany,
-									newJournalDetailsMirror,
-									unitId: dto.unitId,
-									bankUnitId: bankAccount.unitId,
-									amount: dto.amount,
-									jumlahBayar: dto.jumlahBayar,
-									date: dto.date,
-									description: dto.description,
-									transactionNumber: dto.transactionNumber,
-									mirrorJournalId: mirrorJournal?.id ?? null,
-								},
-							} as any,
-						},
-					});
-				}
+							},
+						});
+						newJournalDetailsMain = buildJournalDetails(dto, bankAccount, true);
+					}
 
-				// Update transaksi utama
-				return tx.cashBankTransaction.update({
-					where: { id },
-					data: {
-						amountInIDR: dto.amount,
-						amountOriginal: dto.amount,
-						grossAmount: dto.amount,
-						date: dto.date,
-						description: dto.description,
-						accountCode: dto.accountCode,
-						bank_account_id: bankAccount.id,
-						unitId: isNowIntercompany ? dto.unitId : bankAccount.unitId,
-						to: dto.to,
-						address: dto.address,
-						taxType: dto.taxType,
-						taxValue: dto.taxValue,
-						accounIdTax: dto.accounIdTax,
-						cashBankTransactionDetails: {
-							create: dto.cashBankTransactionDetails.map((item) => ({
-								accountCode: item.accountCode,
-								accountName: item.accountName,
-								keterangan: item.keterangan,
-								unitId: item.unitId,
-								credit: item.credit,
-								debit: item.debit,
-							})),
+					// ── CASE 2: create beda unit → edit beda unit ────────────────────────────
+					else if (existing.unitId !== bankAccount.unitId && bankAccount.unitId !== dto.unitId) {
+						journalId = await tx.journalEntry.create({
+							data: {
+								module: 'FINANCE',
+								date: dto.date,
+								description: dto.to,
+								purposeTransaction: dto.to,
+								referenceNumber: dto.transactionNumber,
+								numberJurnal: numberJurnal,
+								createdBy: 'System',
+								staffId: decoded.id,
+								unitId: bankAccount.unitId,
+								transactionId: id,
+								totalBalance: dto.amount,
+								details: {
+									create: buildJournalDetails(dto, bankAccount, true),
+								},
+							},
+						});
+						newJournalDetailsMain = buildJournalDetails(dto, bankAccount, false);
+						mirrorJournalId = await tx.journalEntry.create({
+							data: {
+								module: 'SALES',
+								date: dto.date,
+								description: `Mirror TMP: piutang via Pusat - ${dto.to}`,
+								purposeTransaction: dto.to,
+								referenceNumber: dto.transactionNumber,
+								numberJurnal: numberJurnalMirror,
+								createdBy: 'System',
+								staffId: decoded.id,
+								transactionId: id,
+								unitId: dto.unitId,
+								is_intercompany: true,
+								intercompanyReference: numberJurnal,
+								totalBalance: dto.amount,
+								details: {
+									create: buildMirrorDetails(dto),
+								},
+							},
+						});
+						newJournalDetailsMirror = buildMirrorDetails(dto);
+					}
+
+					// ── CASE 3: create pusat → edit beda unit ────────────────────────────
+					else if (existing.unitId === bankAccount.unitId && bankAccount.unitId !== dto.unitId) {
+						journalId = await tx.journalEntry.create({
+							data: {
+								module: 'FINANCE',
+								date: dto.date,
+								description: dto.to,
+								purposeTransaction: dto.to,
+								referenceNumber: dto.transactionNumber,
+								transactionId: id,
+								numberJurnal: numberJurnal,
+								createdBy: 'System',
+								staffId: decoded.id,
+								unitId: bankAccount.unitId,
+								totalBalance: dto.amount,
+								details: {
+									create: buildJournalDetails(dto, bankAccount, true),
+								},
+							},
+						});
+						newJournalDetailsMain = buildJournalDetails(dto, bankAccount, false);
+						mirrorJournalId = await tx.journalEntry.create({
+							data: {
+								module: 'SALES',
+								date: dto.date,
+								description: `Mirror TMP: piutang via Pusat - ${dto.to}`,
+								purposeTransaction: dto.to,
+								referenceNumber: existing.transactionNumber,
+								numberJurnal: numberJurnalMirror,
+								createdBy: 'System',
+								staffId: decoded.id,
+								transactionId: id,
+								unitId: dto.unitId,
+								is_intercompany: true,
+								intercompanyReference: journalId.numberJurnal,
+								totalBalance: dto.amount,
+								details: {
+									create: buildMirrorDetails(dto),
+								},
+							},
+						});
+						newJournalDetailsMirror = buildMirrorDetails(dto);
+					}
+
+					// ── CASE 4: create beda unit → edit pusat ────────────────────────────
+					else if (existing.unitId !== bankAccount.unitId && bankAccount.unitId === dto.unitId) {
+						journalId = await tx.journalEntry.create({
+							data: {
+								module: 'FINANCE',
+								date: dto.date,
+								description: dto.to,
+								purposeTransaction: dto.to,
+								referenceNumber: dto.transactionNumber,
+								numberJurnal: numberJurnal,
+								createdBy: 'System',
+								staffId: decoded.id,
+								unitId: bankAccount.unitId,
+								transactionId: id,
+								totalBalance: dto.amount,
+								details: {
+									create: buildJournalDetails(dto, bankAccount, true),
+								},
+							},
+						});
+						newJournalDetailsMain = buildJournalDetails(dto, bankAccount, true);
+					}
+
+					// ─── 6. Hitung diff details untuk ditampilkan ke user ─────
+					// const newJournalDetailsMain = [
+					// 	{ accountCode: bankAccount.accountCode, debit: dto.amount || 0, unitId: bankAccount.unitId, credit: 0 },
+					// 	{ accountCode: INTERCOMPANY_CODE, debit: 0, unitId: bankAccount.unitId, credit: dto.amount || 0 },
+					// ];
+					const detailChanges = this.computeJournalDiff(mainJournal, newJournalDetailsMain);
+					const mirrorChanges = this.computeJournalDiff(mirrorJournal, newJournalDetailsMirror);
+
+					// const mirrorChanges = this.computeMirrorDiff({ wasIntercompany, isIntercompany, mirrorJournal, dto });
+					// const allChanges = [...detailChanges, ...mirrorChanges];
+					const allChanges = detailChanges;
+
+					// ─── 7. Simpan pending suggestion (hanya details) ─────────
+					if (allChanges.length > 0) {
+						await tx.journalAdjustmentSuggestion.create({
+							data: {
+								journalEntryId: journalId.id,
+								transactionId: id,
+								status: 'PENDING',
+								changes: {
+									fields: allChanges,
+									snapshot: {
+										isIntercompany,
+										wasIntercompany,
+										newJournalDetailsMain,
+										unitId: bankAccount.unitId,
+										bankUnitId: bankAccount.unitId,
+										amount: dto.amount,
+										jumlahBayar: dto.jumlahBayar,
+										date: dto.date,
+										description: dto.description,
+										transactionNumber: dto.transactionNumber,
+										mirrorJournalId: mirrorJournal?.id ?? null,
+									},
+								} as any,
+							},
+						});
+					}
+					// ─── 7. Simpan pending suggestion (hanya details) ─────────
+					if (mirrorJournal && mirrorChanges.length > 0 && dto.unitId !== bankAccount.unitId) {
+						await tx.journalAdjustmentSuggestion.create({
+							data: {
+								journalEntryId: mirrorJournalId.id,
+								transactionId: id,
+								status: 'PENDING',
+								changes: {
+									fields: mirrorChanges,
+									snapshot: {
+										isIntercompany,
+										wasIntercompany,
+										newJournalDetailsMirror,
+										unitId: dto.unitId,
+										bankUnitId: bankAccount.unitId,
+										amount: dto.amount,
+										jumlahBayar: dto.jumlahBayar,
+										date: dto.date,
+										description: dto.description,
+										transactionNumber: dto.transactionNumber,
+										mirrorJournalId: mirrorJournal?.id ?? null,
+									},
+								} as any,
+							},
+						});
+					}
+
+					// Update transaksi utama
+					return tx.cashBankTransaction.update({
+						where: { id },
+						data: {
+							amountInIDR: dto.amount,
+							amountOriginal: dto.amount,
+							grossAmount: dto.amount,
+							date: dto.date,
+							description: dto.description,
+							accountCode: dto.accountCode,
+							bank_account_id: bankAccount.id,
+							unitId: isNowIntercompany ? dto.unitId : bankAccount.unitId,
+							to: dto.to,
+							address: dto.address,
+							taxType: dto.taxType,
+							taxValue: dto.taxValue,
+							accounIdTax: dto.accounIdTax,
+							cashBankTransactionDetails: {
+								create: dto.cashBankTransactionDetails.map((item) => ({
+									accountCode: item.accountCode,
+									accountName: item.accountName,
+									keterangan: item.keterangan,
+									unitId: item.unitId,
+									credit: item.credit,
+									debit: item.debit,
+								})),
+							},
 						},
-					},
-				});
-			});
+					});
+				},
+				{
+					maxWait: 10000,
+					timeout: 15000,
+				},
+			);
 		} catch (err) {
 			throw err;
 		}
@@ -4091,14 +4770,10 @@ export class TransactionService {
 					where: { transactionId: id },
 				});
 
-				// Hapus detail dan jurnal lama. Status posted sudah diperiksa di atas.
+				// Hapus seluruh detail jurnal lama, termasuk jurnal tambahan
 				for (const journal of existing.journalEntry) {
 					await tx.journalEntryDetail.deleteMany({
 						where: { journalEntryId: journal.id },
-					});
-
-					await tx.journalEntry.delete({
-						where: { id: journal.id },
 					});
 				}
 

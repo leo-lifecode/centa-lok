@@ -469,7 +469,7 @@ export default function TransactionOutAddRawMaterial() {
                 borderRadius: 8,
               }}
             >
-              Penerimaan Tahun Sebelumnya (Manual)
+              Pengeluaran Tahun Sebelumnya (Manual)
             </Checkbox>
           </Flex>
         }

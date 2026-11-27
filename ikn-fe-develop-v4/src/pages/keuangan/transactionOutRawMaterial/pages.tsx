@@ -12,7 +12,7 @@ import { Button, Space, Checkbox } from 'antd';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import type { FilterDropdownProps } from 'antd/es/table/interface';
 import Highlighter from 'react-highlight-words';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import * as TransactionOutAxios from '@pages/keuangan/transactionOutRawMaterial/service/TransactionOutAxios';
 
 import * as globalHooks from '@/hooks';
@@ -51,7 +51,10 @@ type DataIndex = keyof DataType;
 
 export default function TransactionOutRawMaterialPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { access, user } = useAccess();
+
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const canToggleAction = [
     '8c6a2b36-43f2-4020-b06c-1f6ff0914b99',
@@ -59,6 +62,7 @@ export default function TransactionOutRawMaterialPage() {
   ].includes(user?.id ?? '');
   const [searchText, setSearchText] = useState('');
   const [idDelete, setIdDelete] = useState('');
+  const [postingLoadingId, setPostingLoadingId] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef<InputRef>(null);
   const [dataTable, setTable] = useState({
@@ -108,8 +112,9 @@ export default function TransactionOutRawMaterialPage() {
     dataTable.transactionNumber,
     dataTable.description,
     dataTable.amountInIDR,
+    location.key,
+    refreshKey,
   ]);
-
   const dataSource: DataType[] = useMemo(() => dataTable.data, [dataTable.data]);
 
   globalHooks.useFetchOptions(unit, setUnit, TransactionOutAxios.fetchDataUnit, [unit.nama]);
@@ -247,6 +252,32 @@ export default function TransactionOutRawMaterialPage() {
     }
   };
 
+  const handlePosting = async (id: string) => {
+    try {
+      setPostingLoadingId(id);
+
+      await TransactionOutAxios.postingCashOutFlowRawMaterial(id);
+
+      showNotification('success', 'Berhasil', 'Posting jurnal berhasil.');
+
+      // Ambil ulang data agar status jurnal terbaru tampil di tabel.
+      setRefreshKey((prev) => prev + 1);
+    } catch (e: any) {
+      if (axios.isAxiosError(e?.customMessage)) {
+        return showModal({
+          type: 'danger',
+          title: 'Terjadi Kesalahan',
+          description: e?.customMessage?.response?.data?.message || 'Gagal Posting Jurnal',
+          confirmText: 'Ya',
+        });
+      }
+
+      showNotification('error', 'Gagal', 'Gagal Posting Jurnal.');
+    } finally {
+      setPostingLoadingId('');
+    }
+  };
+
   const handleToggleAction = async (recordId: string, checked: boolean) => {
     try {
       await TransactionOutAxios.updateTransactionActionAccess(recordId, checked);
@@ -313,6 +344,10 @@ export default function TransactionOutRawMaterialPage() {
         const isJournalPosted =
           record.journalEntry?.some((journal) => journal.isPosted === true) ?? false;
 
+        const hasActiveJournal = (record.journalEntry?.length ?? 0) > 0;
+
+        const isAlreadyPosted = hasActiveJournal;
+
         const isActionDisabled = !isEnabled || isJournalPosted;
 
         return (
@@ -345,6 +380,23 @@ export default function TransactionOutRawMaterialPage() {
                 icon={<DeleteOutlined />}
               >
                 Delete
+              </Button>
+            </Popconfirm>
+
+            <Popconfirm
+              title="Konfirmasi Posting Jurnal"
+              description="Apakah Anda yakin ingin melakukan posting transaksi ini ke jurnal?"
+              okText="Ya"
+              cancelText="Batal"
+              onConfirm={() => handlePosting(record.id)}
+            >
+              <Button
+                type="primary"
+                disabled={isAlreadyPosted || postingLoadingId === record.id}
+                loading={postingLoadingId === record.id}
+                onClick={() => handlePosting(record.id)}
+              >
+                Posting
               </Button>
             </Popconfirm>
 

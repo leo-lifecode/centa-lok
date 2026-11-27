@@ -33,9 +33,41 @@ export const updateTransaction = async (
 ) => {
   try {
     const result = await api.patch(`/api/v1/keuangan/transaction/cash-out/${id}`, data);
+
     if (![200, 201].includes(result.status)) {
       throw new Error('Terjadi kesalahan');
     }
+
+    return result.data.data;
+  } catch (e: unknown) {
+    ThrowError(e);
+  }
+};
+
+export const updateTransactionActionAccess = async (id: string, isActionEnabled: boolean) => {
+  try {
+    const result = await api.patch(`/api/v1/keuangan/transaction/${id}/action-access`, {
+      isActionEnabled,
+    });
+
+    if (![200, 201].includes(result.status)) {
+      throw new Error('Terjadi kesalahan');
+    }
+
+    return result.data.data;
+  } catch (e: unknown) {
+    ThrowError(e);
+  }
+};
+
+export const postingCashOutFlow = async (id: string) => {
+  try {
+    const result = await api.post(`/api/v1/keuangan/transaction/cash-out-flow/${id}/posting`);
+
+    if (![200, 201].includes(result.status)) {
+      throw new Error('Terjadi kesalahan');
+    }
+
     return result.data.data;
   } catch (e: any) {
     ThrowError(e);
@@ -86,12 +118,14 @@ export const fetchDataTransactionById = async (id: string) => {
 
 export const delTransaction = async (id: string) => {
   try {
-    const result = await api.delete(`/api/v1/marketing/invoice/${id}`);
+    const result = await api.delete(`/api/v1/keuangan/transaction/${id}`);
+
     if (![200, 201].includes(result.status)) {
       throw new Error('Terjadi kesalahan');
     }
+
     return result.data.data;
-  } catch (e: any) {
+  } catch (e: unknown) {
     ThrowError(e);
   }
 };

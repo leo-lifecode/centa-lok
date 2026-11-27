@@ -1,7 +1,7 @@
 import { Injectable, Scope } from '@nestjs/common';
+import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
 import { GetProductDto } from './dto/get-product.dto';
-import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 
 @Injectable({ scope: Scope.REQUEST })
 export class ProductService {
@@ -123,15 +123,13 @@ export class ProductService {
 				};
 
 				if (date) {
-					const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1); // awal bulan ini
-					const startOfNextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1); // awal bulan depan
+					const startOfNextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+
 					whereOut.createdAt = {
-						gte: startOfMonth,
 						lt: startOfNextMonth,
 					};
 
 					whereIn.createdAt = {
-						gte: startOfMonth,
 						lt: startOfNextMonth,
 					};
 				}
@@ -146,13 +144,18 @@ export class ProductService {
 					where: whereOut,
 				});
 
-				const stokTerkini = (stokMasuk._sum.quantity ?? 0) - (stokKeluar._sum.quantity ?? 0);
+				const stokTerkini = Number(stokMasuk._sum.quantity ?? 0) - Number(stokKeluar._sum.quantity ?? 0);
+
+				const nilaiSatuan = Number(product.nilaiSatuan ?? 0);
+
+				const total = stokTerkini * nilaiSatuan;
 
 				return {
 					...product,
 					stokTerkini,
+					Total: total,
 				};
-			})
+			}),
 		);
 
 		return {

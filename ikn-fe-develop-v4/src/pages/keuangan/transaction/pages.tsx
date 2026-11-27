@@ -125,6 +125,8 @@ export default function TransactionPage() {
   const [searchText, setSearchText] = useState('');
   const [idDelete, setIdDelete] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const [refreshData, setRefreshData] = useState(0);
   const searchInput = useRef<InputRef>(null);
 
   const [dataTable, setTable] = useState<{
@@ -167,7 +169,10 @@ export default function TransactionPage() {
 
   useEffect(() => {
     const fetch = async () => {
+      setTable((prev) => ({ ...prev, loading: true }));
+
       const res = await TransactionAxios.fetchDataTransaction(dataTable as any);
+
       setTable((prev) => ({
         ...prev,
         data: res?.data.data.data,
@@ -175,8 +180,9 @@ export default function TransactionPage() {
         total: res?.data.data.totalData,
       }));
     };
+
     fetch();
-  }, [dataTable.page, dataTable.date]);
+  }, [dataTable.page, dataTable.date, refreshData]);
 
   const dataSource: TransactionInterfaces.TransactionType[] = useMemo(
     () => dataTable.data,
@@ -340,6 +346,28 @@ export default function TransactionPage() {
     }
   };
 
+  const handlePosting = async (id: string) => {
+    try {
+      setPostingId(id);
+
+      await TransactionAxios.postingCashInFlow(id);
+
+      showNotification('success', 'Berhasil', 'Jurnal transaksi berhasil dibuat kembali.');
+
+      setRefreshData((prev) => prev + 1);
+    } catch (error: any) {
+      showNotification(
+        'error',
+        'Gagal',
+        error?.response?.data?.message ||
+          error?.customMessage?.response?.data?.message ||
+          'Gagal melakukan posting jurnal.'
+      );
+    } finally {
+      setPostingId(null);
+    }
+  };
+
   const baseColumns = (acc: any): TableColumnsType<TransactionInterfaces.TransactionType> => [
     {
       title: 'Nomor Transaksi',
@@ -388,6 +416,7 @@ export default function TransactionPage() {
       align: 'center',
       render: (_: any, record: TransactionInterfaces.TransactionType) => {
         const recordId = record.id;
+        const hasJournal = (record.journalEntry?.length ?? 0) > 0;
 
         console.log('CHECKBOX DEBUG:', {
           recordId,
@@ -440,6 +469,31 @@ export default function TransactionPage() {
                 icon={<DeleteOutlined />}
               >
                 Delete
+              </Button>
+            </Popconfirm>
+
+            <Popconfirm
+              title="Konfirmasi Posting"
+              description="Apakah Anda yakin ingin membuat kembali jurnal transaksi ini?"
+              okText="Ya, Posting"
+              cancelText="Batal"
+              onConfirm={() => {
+                if (recordId && !hasJournal) {
+                  handlePosting(recordId);
+                }
+              }}
+            >
+              <Button
+                type="primary"
+                disabled={
+                  !recordId ||
+                  hasJournal ||
+                  postingId !== null ||
+                  !hasAccessButton(acc, '/transaction', 'edit')
+                }
+                loading={postingId === recordId}
+              >
+                Posting
               </Button>
             </Popconfirm>
 

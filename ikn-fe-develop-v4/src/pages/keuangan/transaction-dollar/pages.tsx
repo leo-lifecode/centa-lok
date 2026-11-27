@@ -35,6 +35,8 @@ export default function TransactionDollarPage() {
   ].includes(user?.id ?? '');
   const [searchText, setSearchText] = useState('');
   const [idDelete, setIdDelete] = useState('');
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const [refreshData, setRefreshData] = useState(0);
   const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef<InputRef>(null);
   const [dataTable, setTable] = useState<{
@@ -92,6 +94,7 @@ export default function TransactionDollarPage() {
     dataTable.transactionNumber,
     dataTable.invoiceNumber,
     dataTable.description,
+    refreshData,
   ]);
 
   const dataSource: TransactionInterfaces.TransactionType[] = useMemo(
@@ -226,6 +229,28 @@ export default function TransactionDollarPage() {
     }
   };
 
+  const handlePosting = async (id: string) => {
+    try {
+      setPostingId(id);
+
+      await TransactionAxios.postingCashInFlowDollar(id);
+
+      showNotification('success', 'Berhasil', 'Jurnal transaksi Dollar berhasil dibuat kembali.');
+
+      setRefreshData((prev) => prev + 1);
+    } catch (error: any) {
+      showNotification(
+        'error',
+        'Gagal',
+        error?.response?.data?.message ||
+          error?.customMessage?.response?.data?.message ||
+          'Gagal melakukan posting jurnal.'
+      );
+    } finally {
+      setPostingId(null);
+    }
+  };
+
   const handleToggleAction = async (recordId: string, checked: boolean) => {
     try {
       await TransactionAxios.updateTransactionActionAccess(recordId, checked);
@@ -296,6 +321,7 @@ export default function TransactionDollarPage() {
         // Deklarasi variabel
         const recordId = record.id;
         const isEnabled = record.isActionEnabled === true;
+        const hasJournal = (record.journalEntry?.length ?? 0) > 0;
 
         // Periksa seluruh jurnal yang terhubung dengan transaksi
         const isJournalPosted =
@@ -345,6 +371,32 @@ export default function TransactionDollarPage() {
                 icon={<DeleteOutlined />}
               >
                 Delete
+              </Button>
+            </Popconfirm>
+
+            {/* POSTING JURNAL */}
+            <Popconfirm
+              title="Konfirmasi Posting"
+              description="Apakah Anda yakin ingin membuat kembali jurnal transaksi Dollar ini?"
+              okText="Ya, Posting"
+              cancelText="Batal"
+              onConfirm={() => {
+                if (recordId && !hasJournal) {
+                  handlePosting(recordId);
+                }
+              }}
+            >
+              <Button
+                type="primary"
+                disabled={
+                  !recordId ||
+                  hasJournal ||
+                  postingId !== null ||
+                  !hasAccessButton(acc, '/transaction-dollar', 'edit')
+                }
+                loading={postingId === recordId}
+              >
+                Posting
               </Button>
             </Popconfirm>
 

@@ -7,8 +7,6 @@ import { ShareModuleService } from '@src/modules/share-module/share-module.servi
 import { CreateRawMaterialIssueDto } from './dto/create-raw-material-issue.dto';
 import { CreateRawMaterialDto } from './dto/create-raw-material.dto';
 import { GetMaterialDto } from './dto/get-raw-material.dto';
-import { nowWIBString } from '@src/shared/utils/glolabalFunc';
-import { randomUUID } from 'crypto';
 import { UpdateRawMaterialDto, UpdateRawMaterialIssueDto } from './dto/update-raw-material.dto';
 
 @Injectable({ scope: Scope.REQUEST })
@@ -251,13 +249,6 @@ export class RawMaterialService {
 						},
 					},
 					items: true,
-					// Status jurnal terbaru: dipakai FE untuk menonaktifkan Revert saat jurnal sudah di-Revert dari menu Jurnal.
-					journalEntry: {
-						where: { deletedAt: null },
-						orderBy: { createdAt: 'desc' },
-						take: 1,
-						select: { id: true, isPosted: true, isRevert: true, status: true },
-					},
 				},
 				where: whereCondition,
 				orderBy: orderBy ?? { createdAt: 'desc' },
@@ -814,12 +805,7 @@ export class RawMaterialService {
 		);
 	}
 
-	/**
-	 * @param options.glAlreadyReverted true jika buku besar sudah dibalik lebih dulu lewat Revert di menu Jurnal
-	 * (jurnal berstatus isPosted=false, CONFIRMED). Maka hanya stok & status dokumen yang dibalik.
-	 */
-	async revertIssue(id: string, decoded: DecodeTokenType, options: { glAlreadyReverted?: boolean } = {}) {
-		const glDone = options.glAlreadyReverted === true;
+	async revertIssue(id: string, decoded: DecodeTokenType) {
 		return this.prisma.$transaction(
 			async (tx) => {
 				// =====================================================
@@ -871,7 +857,7 @@ export class RawMaterialService {
 				// =====================================================
 				// 3. Validasi status jurnal.
 				// =====================================================
-				if (journal.isPosted === glDone || journal.status !== 'CONFIRMED' || journal.isRevert !== 'N') {
+				if (!journal.isPosted || journal.status !== 'CONFIRMED' || journal.isRevert !== 'N') {
 					throw new BadRequestException('Pengeluaran harus berstatus POSTED sebelum di-Revert');
 				}
 
@@ -903,7 +889,7 @@ export class RawMaterialService {
 					where: {
 						id: journal.id,
 						deletedAt: null,
-						isPosted: !glDone,
+						isPosted: true,
 						isRevert: 'N',
 						status: 'CONFIRMED',
 					},
@@ -1130,7 +1116,7 @@ export class RawMaterialService {
 				// =====================================================
 				// 11. Balik dampak jurnal pada General Ledger.
 				// =====================================================
-				for (const detail of glDone ? [] : journal.details) {
+				for (const detail of journal.details) {
 					const debit = Number(detail.debit);
 					const credit = Number(detail.credit);
 
@@ -2142,9 +2128,7 @@ export class RawMaterialService {
 		);
 	}
 
-	/** @see revertIssue untuk arti options.glAlreadyReverted */
-	async revertReceipt(id: string, decoded: DecodeTokenType, options: { glAlreadyReverted?: boolean } = {}) {
-		const glDone = options.glAlreadyReverted === true;
+	async revertReceipt(id: string, decoded: DecodeTokenType) {
 		return this.prisma.$transaction(
 			async (tx) => {
 				// 1. Klaim dokumen agar tidak direvert dua kali bersamaan.
@@ -2204,15 +2188,11 @@ export class RawMaterialService {
 				}
 
 				const journal = receipt.journalEntry.find(
-					(item) => item.isPosted === !glDone && item.status === 'CONFIRMED' && item.isRevert !== 'Y',
+					(item) => item.isPosted === true && item.status === 'CONFIRMED' && item.isRevert !== 'Y',
 				);
 
 				if (!journal) {
-					throw new NotFoundException(
-						glDone
-							? 'Revert dulu jurnal penerimaan ini dari menu Jurnal Khusus Rp, baru bisa di-Revert di sini.'
-							: 'Jurnal penerimaan aktif yang sudah diposting tidak ditemukan',
-					);
+					throw new NotFoundException('Jurnal penerimaan aktif yang sudah diposting tidak ditemukan');
 				}
 
 				// 3. Validasi periode akuntansi.
@@ -2540,7 +2520,7 @@ export class RawMaterialService {
 					}
 				>();
 
-				for (const detail of glDone ? [] : journal.details) {
+				for (const detail of journal.details) {
 					const debit = Number(detail.debit);
 					const credit = Number(detail.credit);
 
@@ -2603,34 +2583,15 @@ export class RawMaterialService {
 					}
 				}
 
-				// 10. Soft delete jurnal penerimaan (deletedAt terisi, nomor jurnal diganti UUID agar bebas dipakai lagi).
-				// Posting ulang akan membuat jurnal baru dengan id baru.
-				const deletedAt = nowWIBString();
-				const childJournals = await tx.journalEntry.findMany({
-					where: { journalEntryId: journal.id, deletedAt: null },
-					select: { id: true },
+				// 10. Tandai jurnal sudah direvert.
+				await tx.journalEntry.update({
+					where: { id: journal.id },
+					data: {
+						isPosted: false,
+						isRevert: 'Y',
+						status: 'CANCELLED',
+					},
 				});
-				const journalIds = [journal.id, ...childJournals.map((item) => item.id)];
-
-				await tx.journalAdjustmentSuggestion.deleteMany({
-					where: { journalEntryId: { in: journalIds } },
-				});
-				await tx.journalEntryDetail.updateMany({
-					where: { journalEntryId: { in: journalIds } },
-					data: { deletedAt },
-				});
-				for (const journalId of journalIds) {
-					await tx.journalEntry.update({
-						where: { id: journalId },
-						data: {
-							isPosted: false,
-							isRevert: 'Y',
-							status: 'CANCELLED',
-							numberJurnal: randomUUID(),
-							deletedAt,
-						},
-					});
-				}
 
 				// 11. Tandai dokumen REVERTED.
 				return tx.rawMaterialReceipt.update({

@@ -27,6 +27,22 @@ export const posTransaction = async (data: TransactionInterfaces.TransactionType
   }
 };
 
+export const postingCashInFlowDollar = async (id: string) => {
+  try {
+    const result = await api.post(
+      `/api/v1/keuangan/transaction/dollar/cash-in-flow/${id}/posting`
+    );
+
+    if (![200, 201].includes(result.status)) {
+      throw new Error('Terjadi kesalahan');
+    }
+
+    return result.data.data;
+  } catch (e: unknown) {
+    ThrowError(e);
+  }
+};
+
 export const updateTransaction = async (
   id: string,
   data: TransactionInterfaces.TransactionType

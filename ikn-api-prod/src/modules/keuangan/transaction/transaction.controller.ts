@@ -105,6 +105,36 @@ export class TransactionController {
 		return this.transactionService.removeCashOutFlowRawMaterial(id);
 	}
 
+	@Post('cash-out-flow-raw-material/:id/posting')
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Posting jurnal Kas Keluar Material (Rp)' })
+	postingCashOutFlowRawMaterial(@Req() req: Request, @Param('id') id: string) {
+		const decoded = this.helperGlobal.decodeJwt(req);
+		return this.transactionService.postingCashOutFlowRawMaterial(id, decoded);
+	}
+
+	@Post('cash-out-flow/:id/posting')
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Posting jurnal Kas Keluar (Rp)' })
+	postingCashOutFlow(@Req() req: Request, @Param('id') id: string) {
+		const decoded = this.helperGlobal.decodeJwt(req);
+		return this.transactionService.postingCashOutFlow(id, decoded);
+	}
+
+	@Post('cash-in-flow/:id/posting')
+	postingCashInFlow(@Param('id') id: string, @Req() req: Request) {
+		const decoded = this.helperGlobal.decodeJwt(req);
+		return this.transactionService.postingCashInFlow(id, decoded);
+	}
+
+	@Post('dollar/cash-in-flow/:id/posting')
+	@ApiBearerAuth()
+	@ApiOperation({ summary: 'Posting jurnal Uang Masuk Bank (Dollar)' })
+	postingCashInFlowDollar(@Param('id') id: string, @Req() req: Request) {
+		const decoded = this.helperGlobal.decodeJwt(req);
+		return this.transactionService.postingCashInFlowDollar(id, decoded);
+	}
+
 	@Delete(':id')
 	@ApiBearerAuth()
 	@ApiOperation({ summary: 'Remove transaction' })

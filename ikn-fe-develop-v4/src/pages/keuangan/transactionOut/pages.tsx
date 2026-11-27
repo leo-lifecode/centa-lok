@@ -8,7 +8,7 @@ import { MagnifyingGlass } from '@phosphor-icons/react';
 import type { FilterDropdownProps } from 'antd/es/table/interface';
 import Highlighter from 'react-highlight-words';
 import { useNavigate } from 'react-router';
-import * as TransactionAxios from '@pages/keuangan/transaction/service/TransactionAxios';
+import * as TransactionOutAxios from '@pages/keuangan/transactionOut/service/TransactionOutAxios';
 
 import * as globalHooks from '@/hooks';
 import dayjs from 'dayjs';
@@ -69,6 +69,10 @@ export default function TransactionOutPage() {
     isMaterial: 'N',
     grossAmount: null,
   });
+
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const [unit, setUnit] = useState({
     data: [],
     page: 1,
@@ -81,7 +85,7 @@ export default function TransactionOutPage() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await TransactionAxios.fetchDataTransaction(dataTable as any);
+        const res = await TransactionOutAxios.fetchDataTransaction(dataTable as any);
 
         const transactions = res?.data.data.data || [];
 
@@ -95,6 +99,7 @@ export default function TransactionOutPage() {
         showNotification('error', 'Gagal', 'Gagal Filter Data');
       }
     };
+
     fetch();
   }, [
     dataTable.page,
@@ -102,11 +107,11 @@ export default function TransactionOutPage() {
     dataTable.transactionNumber,
     dataTable.description,
     dataTable.amountInIDR,
+    refreshKey,
   ]);
-
   const dataSource: DataType[] = useMemo(() => dataTable.data, [dataTable.data]);
 
-  globalHooks.useFetchOptions(unit, setUnit, TransactionAxios.fetchDataUnit, [unit.nama]);
+  globalHooks.useFetchOptions(unit, setUnit, TransactionOutAxios.fetchDataUnit, [unit.nama]);
 
   useEffect(() => {
     const newDdata = dataTable.data.filter((item: any) => item.id != idDelete);
@@ -223,7 +228,7 @@ export default function TransactionOutPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await TransactionAxios.delTransaction(id);
+      await TransactionOutAxios.delTransaction(id);
       setIdDelete(id);
       showNotification('success', 'Berhasil', 'Berhapus Hapus Data');
     } catch (e: any) {
@@ -239,9 +244,27 @@ export default function TransactionOutPage() {
       showNotification('error', 'Gagal', 'Gagal Hapus Data');
     }
   };
+
+  const handlePosting = async (id: string) => {
+    try {
+      setPostingId(id);
+
+      await TransactionOutAxios.postingCashOutFlow(id);
+
+      showNotification('success', 'Berhasil', 'Jurnal Kas Keluar berhasil dibuat.');
+
+      // Ambil ulang data agar status journalEntry diperbarui
+      setRefreshKey((prev) => prev + 1);
+    } catch (e: any) {
+      showNotification('error', 'Gagal', 'Gagal melakukan Posting Jurnal Kas Keluar.');
+    } finally {
+      setPostingId(null);
+    }
+  };
+
   const handleToggleAction = async (recordId: string, checked: boolean) => {
     try {
-      await TransactionAxios.updateTransactionActionAccess(recordId, checked);
+      await TransactionOutAxios.updateTransactionActionAccess(recordId, checked);
 
       setTable((prev: any) => ({
         ...prev,
@@ -301,10 +324,12 @@ export default function TransactionOutPage() {
       render: (_: any, record: DataType) => {
         const isEnabled = record.isActionEnabled === true;
 
-const isJournalPosted =
-  record.journalEntry?.some((journal) => journal.isPosted === true) ?? false;
+        const isJournalPosted =
+          record.journalEntry?.some((journal) => journal.isPosted === true) ?? false;
 
-const isActionDisabled = !isEnabled || isJournalPosted;
+        const hasActiveJournal = (record.journalEntry?.length ?? 0) > 0;
+
+        const isActionDisabled = !isEnabled || isJournalPosted;
 
         return (
           <Space>
@@ -316,10 +341,7 @@ const isActionDisabled = !isEnabled || isJournalPosted;
 
             {/* EDIT */}
             <ButtonEditGroup
-              disabled={
-  !hasAccessButton(acc, '/transaction-out', 'edit') ||
-  isActionDisabled
-}
+              disabled={!hasAccessButton(acc, '/transaction-out', 'edit') || isActionDisabled}
               onClick={() => handleEdit(record.id)}
             />
 
@@ -331,10 +353,7 @@ const isActionDisabled = !isEnabled || isJournalPosted;
               onConfirm={() => handleDelete(record.id)}
             >
               <Button
-                disabled={
-  !hasAccessButton(acc, '/transaction-out', 'delete') ||
-  isActionDisabled
-}
+                disabled={!hasAccessButton(acc, '/transaction-out', 'delete') || isActionDisabled}
                 type="primary"
                 danger
                 icon={<DeleteOutlined />}
@@ -343,20 +362,36 @@ const isActionDisabled = !isEnabled || isJournalPosted;
               </Button>
             </Popconfirm>
 
+            <Popconfirm
+              title="Konfirmasi Posting Jurnal"
+              description="Apakah Anda yakin ingin melakukan posting transaksi ini ke jurnal?"
+              okText="Ya"
+              cancelText="Batal"
+              onConfirm={() => handlePosting(record.id)}
+            >
+              <Button
+                type="primary"
+                disabled={hasActiveJournal || postingId === record.id}
+                loading={postingId === record.id}
+              >
+                {hasActiveJournal ? 'Posting' : 'Posting!'}
+              </Button>
+            </Popconfirm>
+
             {/* CHECKBOX KHUSUS ADMIN DAN DEVELOPER */}
             {canToggleAction && (
               <Checkbox
-  checked={isEnabled}
-  disabled={isJournalPosted}
-  onClick={(e) => e.stopPropagation()}
-  onChange={(e) => {
-    if (!isJournalPosted) {
-      handleToggleAction(record.id, e.target.checked);
-    }
-  }}
->
-  Aktif
-</Checkbox>
+                checked={isEnabled}
+                disabled={isJournalPosted}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  if (!isJournalPosted) {
+                    handleToggleAction(record.id, e.target.checked);
+                  }
+                }}
+              >
+                Aktif
+              </Checkbox>
             )}
           </Space>
         );

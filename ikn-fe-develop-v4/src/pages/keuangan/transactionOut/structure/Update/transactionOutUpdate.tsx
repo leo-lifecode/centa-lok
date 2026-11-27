@@ -142,9 +142,15 @@ export default function TransactionOutUpdate() {
           address: values.address,
           BankaccountCode: values.BankaccountCode,
           cashBankTransactionDetails: entries.map((items) => {
-            const { key, id, cashBankTransactionId, deletedAt, createdAt, ...newItems } =
-              items as any; //hapus objek
-            return { ...newItems, unitId: values.unit };
+            return {
+              accountCode: items.accountCode,
+              accountName: items.accountName,
+              description: items.keterangan || '-',
+              keterangan: items.keterangan || '-',
+              debit: Number(items.debit) || 0,
+              credit: Number(items.credit) || 0,
+              unitId: values.unit,
+            };
           }),
         };
         setLoading(true);

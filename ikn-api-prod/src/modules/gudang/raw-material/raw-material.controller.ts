@@ -128,8 +128,7 @@ export class RawMaterialController {
 	@ApiOperation({ summary: 'Revert Penerimaan Barang Mentah' })
 	revertReceipt(@Req() req: Request, @Param('id') id: string) {
 		const decoded = this.helperGlobal.decodeJwt(req);
-		// Revert di Gudang hanya untuk penerimaan yang jurnalnya sudah di-Revert dari menu Jurnal Khusus Rp.
-		return this.rawMaterialService.revertReceipt(id, decoded, { glAlreadyReverted: true });
+		return this.rawMaterialService.revertReceipt(id, decoded);
 	}
 
 
