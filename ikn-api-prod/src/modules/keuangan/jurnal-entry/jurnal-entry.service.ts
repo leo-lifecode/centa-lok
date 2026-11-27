@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, Scope } from '@nestjs/common';
 import { DecodeTokenType } from '@src/modules/auth/authentikasi/authentikasi.controller';
 import { PrismaService } from '@src/modules/common/prisma.service';
+import { RawMaterialService } from '@src/modules/gudang/raw-material/raw-material.service';
 import { ShareModuleService } from '@src/modules/share-module/share-module.service';
 import { nowWIBString } from '@src/shared/utils/glolabalFunc';
 import dayjs from 'dayjs';
@@ -13,6 +14,7 @@ export class JurnalEntryService {
 	constructor(
 		private readonly shareModuleService: ShareModuleService,
 		private readonly prisma: PrismaService,
+		private readonly rawMaterialService: RawMaterialService,
 	) {}
 
 	async createJournal(plus = 1) {
@@ -743,7 +745,26 @@ export class JurnalEntryService {
 		}
 	}
 
-	remove(id: string) {
+	async remove(id: string, decoded: DecodeTokenType) {
+		// Jurnal BPB (Penerimaan Barang Material) yang sudah di-Revert dari Jurnal (isPosted=false, CONFIRMED):
+		// Hapus = balik stok & status dokumen Gudang jadi REVERTED (buku besar sudah dibalik saat Revert)
+		// dan jurnal di-soft-delete. Posting ulang di Gudang membuat jurnal baru.
+		const receiptJournal = await this.prisma.journalEntry.findFirst({
+			where: { id, deletedAt: null },
+			select: { isPosted: true, status: true, isRevert: true, rawMaterialReceiptId: true },
+		});
+		if (receiptJournal?.rawMaterialReceiptId) {
+			if (receiptJournal.isPosted) {
+				throw new BadRequestException('Jurnal sudah diposting, tidak dapat dihapus. Revert dulu.');
+			}
+			if (receiptJournal.status !== 'CONFIRMED' || receiptJournal.isRevert !== 'N') {
+				throw new BadRequestException('Jurnal penerimaan ini belum diposting dari Gudang atau sudah di-Revert.');
+			}
+			return this.rawMaterialService.revertReceipt(receiptJournal.rawMaterialReceiptId, decoded, {
+				glAlreadyReverted: true,
+			});
+		}
+
 		return this.prisma.$transaction(async (tx) => {
 			// ---- SYARAT HAPUS: jurnal ada dan belum diposting (DRAFT atau sudah di-Revert) ----
 			const target = await tx.journalEntry.findFirst({

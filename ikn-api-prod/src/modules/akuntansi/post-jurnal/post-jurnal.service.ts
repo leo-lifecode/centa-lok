@@ -137,9 +137,12 @@ export class PostJurnalService {
 			// });
 
 			// Mark journal as posted
+			// Jurnal BPB (Penerimaan Barang Material): status tetap CONFIRMED (isPosted=false) sebagai penanda
+			// "sudah di-Revert dari Jurnal" -> tetap tampil di Jurnal; Revert di Gudang baru aktif setelah ini.
+			const isReceiptJournal = !!journal.rawMaterialReceiptId;
 			await trx.journalEntry.update({
 				where: { id: journalId },
-				data: { isPosted: false, status: 'DRAFT' },
+				data: { isPosted: false, status: isReceiptJournal ? 'CONFIRMED' : 'DRAFT' },
 			});
 		});
 	}
