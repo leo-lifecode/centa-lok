@@ -468,7 +468,12 @@ export default function PenerimaanBarang() {
 
         const canEditOrDelete = isDraft || isReverted;
         const canPost = isDraft || isReverted;
-        const canRevert = isPosted;
+        // Jurnal sudah di-Revert dari menu Jurnal (belum terposting, CONFIRMED).
+        const journal = (record as any)?.journalEntry?.[0];
+        const isJournalReverted =
+          !!journal && journal.isPosted === false && journal.isRevert === 'N' && journal.status === 'CONFIRMED';
+        // Revert di Gudang hanya aktif setelah jurnal di-Revert dari menu Jurnal Khusus Rp.
+        const canRevert = isPosted && isJournalReverted;
 
         return (
           <Space wrap>
